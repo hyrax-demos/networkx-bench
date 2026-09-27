@@ -16,6 +16,7 @@ Recognition
    is_forest
    is_arborescence
    is_branching
+   is_spider
 
 Branchings and Spanning Arborescences
 -------------------------------------

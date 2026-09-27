@@ -11,6 +11,7 @@ Graph
 
    degree
    degree_histogram
+   weighted_degree_histogram
    density
    create_empty_copy
    is_directed
