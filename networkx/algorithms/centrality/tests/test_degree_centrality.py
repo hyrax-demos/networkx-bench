@@ -142,3 +142,51 @@ class TestDegreeCentrality:
         assert {0: 1} == nx.degree_centrality(G)
         assert {0: 1} == nx.out_degree_centrality(G)
         assert {0: 1} == nx.in_degree_centrality(G)
+
+
+class TestDegreeCentralization:
+    def test_star_graph(self):
+        assert nx.degree_centralization(nx.star_graph(5)) == pytest.approx(1.0)
+
+    def test_cycle_graph(self):
+        assert nx.degree_centralization(nx.cycle_graph(6)) == pytest.approx(0.0)
+
+    def test_path_graph_4(self):
+        # degrees: 1, 2, 2, 1; max degree 2
+        # sum(max - d) = 1 + 0 + 0 + 1 = 2; (n - 1)(n - 2) = 3 * 2 = 6
+        assert nx.degree_centralization(nx.path_graph(4)) == pytest.approx(1 / 3)
+
+    @pytest.mark.parametrize("n", [0, 1, 2])
+    def test_small_graphs(self, n):
+        assert nx.degree_centralization(nx.path_graph(n)) == 0.0
+
+    @pytest.mark.parametrize("graph_type", [nx.DiGraph, nx.MultiDiGraph])
+    def test_directed_raises(self, graph_type):
+        G = nx.path_graph(4, create_using=graph_type)
+        with pytest.raises(nx.NetworkXNotImplemented):
+            nx.degree_centralization(G)
+
+    def test_weighted_star(self):
+        # center weighted degree 4 * 2 = 8, each leaf 2
+        # sum(max - w) = 4 * (8 - 2) = 24; max * (n - 1) = 8 * 4 = 32
+        G = nx.star_graph(4)
+        nx.set_edge_attributes(G, 2, "weight")
+        assert nx.degree_centralization(G, weight="weight") == pytest.approx(0.75)
+
+    def test_weighted_path(self):
+        # weighted degrees: 1, 3, 5, 3; max 5
+        # sum(max - w) = 4 + 2 + 0 + 2 = 8; max * (n - 1) = 5 * 3 = 15
+        G = nx.Graph()
+        G.add_weighted_edges_from([(0, 1, 1), (1, 2, 2), (2, 3, 3)])
+        assert nx.degree_centralization(G, weight="weight") == pytest.approx(8 / 15)
+
+    def test_weighted_missing_attr_defaults_to_one(self):
+        # missing attribute counts as weight 1: weighted degrees 1, 2, 2, 1
+        # sum(max - w) = 2; max * (n - 1) = 2 * 3 = 6
+        G = nx.path_graph(4)
+        assert nx.degree_centralization(G, weight="weight") == pytest.approx(1 / 3)
+
+    def test_weighted_zero_weights(self):
+        G = nx.path_graph(4)
+        nx.set_edge_attributes(G, 0, "weight")
+        assert nx.degree_centralization(G, weight="weight") == 0.0

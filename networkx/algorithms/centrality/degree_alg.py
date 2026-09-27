@@ -3,7 +3,12 @@
 import networkx as nx
 from networkx.utils.decorators import not_implemented_for
 
-__all__ = ["degree_centrality", "in_degree_centrality", "out_degree_centrality"]
+__all__ = [
+    "degree_centrality",
+    "degree_centralization",
+    "in_degree_centrality",
+    "out_degree_centrality",
+]
 
 
 @nx._dispatchable
@@ -162,3 +167,92 @@ def out_degree_centrality(G):
     s = 1.0 / (len(G) - 1.0)
     centrality = {n: d * s for n, d in G.out_degree()}
     return centrality
+
+
+@not_implemented_for("directed")
+@nx._dispatchable(edge_attrs="weight")
+def degree_centralization(G, weight=None):
+    r"""Compute Freeman's degree centralization of an undirected graph.
+
+    Degree centralization measures how strongly the edges of a graph are
+    concentrated around a single node. It is defined as
+
+    .. math::
+
+        C_D(G) = \frac{\sum_{v \in V} (d_{max} - d(v))}{(n - 1)(n - 2)}
+
+    where $d(v)$ is the degree of node $v$, $d_{max}$ is the maximum degree
+    in `G`, and $n$ is the number of nodes. The denominator is the largest
+    possible value of the numerator over all simple graphs with $n$ nodes,
+    which is attained by the star graph.
+
+    Parameters
+    ----------
+    G : graph
+        An undirected NetworkX graph.
+
+    weight : string or None, optional (default=None)
+        The edge attribute that holds the numerical value used as a weight.
+        If None, every edge has weight 1 and the unweighted Freeman
+        centralization above is returned. Otherwise the weighted degree
+        $w(v)$ (the sum of the weights of the edges incident to $v$) is used
+        and the result is normalized by the maximum weighted degree times
+        $n - 1$:
+
+        .. math::
+
+            C_D^w(G) = \frac{\sum_{v \in V} (w_{max} - w(v))}{w_{max} (n - 1)}
+
+        If the maximum weighted degree is 0, the centralization is 0.0.
+
+    Returns
+    -------
+    centralization : float
+        The degree centralization of `G`. For simple graphs the value lies
+        in [0, 1]; it is 1.0 for a star graph and 0.0 for any regular graph.
+        Graphs with fewer than 3 nodes have centralization 0.0.
+
+    Raises
+    ------
+    NetworkXNotImplemented
+        If `G` is directed.
+
+    Examples
+    --------
+    >>> G = nx.star_graph(4)
+    >>> nx.degree_centralization(G)
+    1.0
+    >>> nx.degree_centralization(nx.cycle_graph(5))
+    0.0
+    >>> nx.degree_centralization(nx.path_graph(4))
+    0.3333333333333333
+    >>> G = nx.Graph()
+    >>> G.add_weighted_edges_from([(0, 1, 1), (1, 2, 2), (2, 3, 3)])
+    >>> round(nx.degree_centralization(G, weight="weight"), 4)
+    0.5333
+
+    See Also
+    --------
+    degree_centrality
+
+    Notes
+    -----
+    For multigraphs or graphs with self loops the maximum degree might be
+    higher than n-1 and values greater than 1 are possible.
+
+    References
+    ----------
+    .. [1] Freeman, L. C. (1978). Centrality in social networks conceptual
+       clarification. Social Networks, 1(3), 215-239.
+       https://doi.org/10.1016/0378-8733(78)90021-7
+    """
+    n = len(G)
+    if n < 3:
+        return 0.0
+    degrees = [d for _, d in G.degree(weight=weight)]
+    max_degree = max(degrees)
+    if weight is None:
+        return sum(max_degree - d for d in degrees) / ((n - 1) * (n - 2))
+    if max_degree == 0:
+        return 0.0
+    return sum(max_degree - d for d in degrees) / (max_degree * (n - 1))
