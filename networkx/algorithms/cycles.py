@@ -19,6 +19,7 @@ __all__ = [
     "minimum_cycle_basis",
     "chordless_cycles",
     "girth",
+    "is_cactus",
 ]
 
 
@@ -1232,3 +1233,74 @@ def girth(G):
                     depth_limit = du - delta
 
     return girth
+
+
+@not_implemented_for("directed")
+@not_implemented_for("multigraph")
+@nx._dispatchable
+def is_cactus(G):
+    """Returns True if `G` is a cactus graph.
+
+    A cactus graph is a connected undirected graph in which every edge lies
+    on at most one simple cycle. Equivalently, every biconnected component
+    (block) of the graph is either a single edge or a simple cycle [1]_.
+
+    Parameters
+    ----------
+    G : NetworkX Graph
+        An undirected graph.
+
+    Returns
+    -------
+    bool
+        True if `G` is a cactus graph, False otherwise. Disconnected graphs
+        are not cactus graphs.
+
+    Raises
+    ------
+    NetworkXPointlessConcept
+        If `G` is the null graph (has no nodes).
+    NetworkXNotImplemented
+        If `G` is directed or a multigraph.
+
+    Examples
+    --------
+    Two triangles sharing a single node form a cactus, but two triangles
+    sharing an edge do not:
+
+    >>> G = nx.Graph([(0, 1), (1, 2), (2, 0), (2, 3), (3, 4), (4, 2)])
+    >>> nx.is_cactus(G)
+    True
+    >>> G = nx.Graph([(0, 1), (1, 2), (2, 0), (1, 3), (3, 2)])
+    >>> nx.is_cactus(G)
+    False
+
+    Notes
+    -----
+    The algorithm computes the biconnected components of `G` and checks that
+    each has either exactly one edge or as many edges as nodes. It runs in
+    $O(n + m)$ time for a graph with $n$ nodes and $m$ edges.
+
+    See Also
+    --------
+    biconnected_components
+    cycle_basis
+
+    References
+    ----------
+    .. [1] `Wikipedia: Cactus graph <https://en.wikipedia.org/wiki/Cactus_graph>`_
+    """
+    if len(G) == 0:
+        raise nx.NetworkXPointlessConcept("G has no nodes.")
+    if not nx.is_connected(G):
+        return False
+    for block_edges in nx.biconnected_component_edges(G):
+        # A biconnected block with k >= 3 nodes has at least k edges, with
+        # equality exactly when the block is a simple cycle.
+        num_edges = len(block_edges)
+        if num_edges == 1:
+            continue
+        num_nodes = len({n for e in block_edges for n in e})
+        if num_edges != num_nodes:
+            return False
+    return True
