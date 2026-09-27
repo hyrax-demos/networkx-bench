@@ -838,3 +838,62 @@ class TestKemenyConstant:
         G = nx.path_graph(n)
         K = nx.kemeny_constant(G)
         assert np.isclose(K, n**2 / 3 - 2 * n / 3 + 1 / 2)
+
+
+class TestDiameterPath:
+    def _assert_valid(self, G, path, weight=None):
+        assert nx.is_path(G, path)
+        length = nx.path_weight(G, path, weight) if weight else len(path) - 1
+        assert length == nx.diameter(G, weight=weight)
+        assert length == nx.shortest_path_length(G, path[0], path[-1], weight=weight)
+
+    def test_path_graph(self):
+        G = nx.path_graph(5)
+        assert nx.diameter_path(G) == [0, 1, 2, 3, 4]
+
+    def test_cycle_graph(self):
+        G = nx.cycle_graph(6)
+        path = nx.diameter_path(G)
+        self._assert_valid(G, path)
+        assert len(path) - 1 == 3
+        # ties broken by first pair in node order: (0, 3)
+        assert path[0] == 0
+        assert path[-1] == 3
+
+    def test_weighted_graph(self):
+        G = nx.Graph()
+        G.add_weighted_edges_from([(0, 1, 1), (1, 2, 1), (0, 2, 5), (2, 3, 10)])
+        path = nx.diameter_path(G, weight="weight")
+        assert path == [0, 1, 2, 3]
+        self._assert_valid(G, path, weight="weight")
+        # unweighted diameter differs
+        assert len(nx.diameter_path(G)) - 1 == nx.diameter(G) == 2
+
+    def test_weight_function(self):
+        G = nx.path_graph(4)
+        path = nx.diameter_path(G, weight=lambda u, v, d: 2)
+        assert path == [0, 1, 2, 3]
+
+    def test_single_node(self):
+        G = nx.Graph()
+        G.add_node("a")
+        assert nx.diameter_path(G) == ["a"]
+
+    def test_directed(self):
+        G = nx.DiGraph([(0, 1), (1, 2), (2, 0)])
+        path = nx.diameter_path(G)
+        assert path == [0, 1, 2]
+
+    def test_null_graph(self):
+        with pytest.raises(nx.NetworkXPointlessConcept):
+            nx.diameter_path(nx.Graph())
+
+    def test_disconnected(self):
+        G = nx.Graph([(0, 1), (2, 3)])
+        with pytest.raises(nx.NetworkXError, match="not connected"):
+            nx.diameter_path(G)
+
+    def test_not_strongly_connected(self):
+        G = nx.DiGraph([(0, 1), (1, 2)])
+        with pytest.raises(nx.NetworkXError, match="not strongly connected"):
+            nx.diameter_path(G)

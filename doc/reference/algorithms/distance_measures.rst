@@ -9,6 +9,7 @@ Distance Measures
    center
    centroid
    diameter
+   diameter_path
    harmonic_diameter
    eccentricity
    effective_graph_resistance

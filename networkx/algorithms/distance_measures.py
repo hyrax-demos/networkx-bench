@@ -8,6 +8,7 @@ from networkx.utils import not_implemented_for
 __all__ = [
     "eccentricity",
     "diameter",
+    "diameter_path",
     "harmonic_diameter",
     "radius",
     "periphery",
@@ -420,6 +421,93 @@ def diameter(G, e=None, usebounds=False, weight=None):
     if e is None:
         e = eccentricity(G, weight=weight)
     return max(e.values())
+
+
+@nx._dispatchable(edge_attrs="weight")
+def diameter_path(G, weight=None):
+    """Returns a shortest path whose length equals the diameter of G.
+
+    The diameter is the maximum eccentricity, i.e. the greatest shortest-path
+    distance between any pair of nodes. This function returns one shortest
+    path realizing that distance.
+
+    Parameters
+    ----------
+    G : NetworkX graph
+       A graph
+
+    weight : string, function, or None
+        If this is a string, then edge weights will be accessed via the
+        edge attribute with this key (that is, the weight of the edge
+        joining `u` to `v` will be ``G.edges[u, v][weight]``). If no
+        such edge attribute exists, the weight of the edge is assumed to
+        be one.
+
+        If this is a function, the weight of an edge is the value
+        returned by the function. The function must accept exactly three
+        positional arguments: the two endpoints of an edge and the
+        dictionary of edge attributes for that edge. The function must
+        return a number.
+
+        If this is None, every edge has weight/distance/cost 1.
+
+        Weights should be positive, since they are distances.
+
+    Returns
+    -------
+    path : list
+       List of nodes forming a shortest path from ``u`` to ``v``, where
+       ``(u, v)`` is the first pair (in node iteration order of `G`, first by
+       source, then by target) whose shortest-path distance equals the
+       diameter. For a graph with a single node, the path is that node.
+
+    Raises
+    ------
+    NetworkXError
+        If G is not connected (or not strongly connected, if G is directed).
+    NetworkXPointlessConcept
+        If G is a null graph.
+
+    Examples
+    --------
+    >>> G = nx.Graph([(1, 2), (1, 3), (1, 4), (3, 4), (3, 5), (4, 5)])
+    >>> nx.diameter_path(G)
+    [2, 1, 3, 5]
+
+    See Also
+    --------
+    diameter
+    eccentricity
+    """
+    if len(G) == 0:
+        raise nx.NetworkXPointlessConcept(
+            "Cannot compute diameter path of a null graph."
+        )
+
+    order = len(G)
+    best_dist = None
+    best_path = None
+    for u in G:
+        if weight is None:
+            paths = nx.single_source_shortest_path(G, u)
+            dist = {v: len(p) - 1 for v, p in paths.items()}
+        else:
+            dist, paths = nx.single_source_dijkstra(G, u, weight=weight)
+        if len(dist) != order:
+            if G.is_directed():
+                msg = (
+                    "Found infinite path length because the digraph is not"
+                    " strongly connected"
+                )
+            else:
+                msg = "Found infinite path length because the graph is not connected"
+            raise nx.NetworkXError(msg)
+        for v in G:
+            d = dist[v]
+            if best_dist is None or d > best_dist:
+                best_dist = d
+                best_path = paths[v]
+    return best_path
 
 
 @nx._dispatchable(edge_attrs="weight")
