@@ -240,3 +240,56 @@ class TestIsSpider:
     def test_null_graph_raises(self, cls):
         with pytest.raises(nx.NetworkXPointlessConcept, match="G has no nodes."):
             nx.is_spider(cls())
+
+
+class TestSpiderCenterAndLegs:
+    def test_path(self):
+        G = nx.path_graph(5)
+        assert nx.is_spider(G, center=True) == (True, None)
+        assert nx.spider_legs(G) == [4]
+
+    def test_single_node(self):
+        G = nx.empty_graph(1)
+        assert nx.is_spider(G, center=True) == (True, None)
+        assert nx.spider_legs(G) == []
+
+    def test_star(self):
+        G = nx.star_graph(4)
+        assert nx.is_spider(G, center=True) == (True, 0)
+        assert nx.spider_legs(G) == [1, 1, 1, 1]
+
+    @pytest.mark.parametrize("cls", [nx.Graph, nx.MultiGraph])
+    def test_spider_legs_3_2_1(self, cls):
+        G = cls([("c", "a1"), ("a1", "a2"), ("a2", "a3")])
+        G.add_edges_from([("c", "b1"), ("b1", "b2"), ("c", "d1")])
+        assert nx.is_spider(G, center=True) == (True, "c")
+        assert nx.spider_legs(G) == [3, 2, 1]
+
+    def test_center_false_returns_bool(self):
+        assert nx.is_spider(nx.star_graph(3), center=False) is True
+
+    def test_not_spider_center(self):
+        G = nx.star_graph(3)
+        G.add_edges_from([(1, 4), (1, 5)])
+        assert nx.is_spider(G, center=True) == (False, None)
+        assert nx.is_spider(nx.cycle_graph(4), center=True) == (False, None)
+
+    @pytest.mark.parametrize(
+        "G",
+        [
+            nx.cycle_graph(4),
+            nx.empty_graph(2),
+            nx.Graph([(0, 1), (0, 2), (0, 3), (1, 4), (1, 5)]),
+        ],
+    )
+    def test_spider_legs_not_spider_raises(self, G):
+        with pytest.raises(nx.NetworkXError, match="G is not a spider."):
+            nx.spider_legs(G)
+
+    def test_spider_legs_directed_raises(self):
+        with pytest.raises(nx.NetworkXNotImplemented):
+            nx.spider_legs(nx.DiGraph([(0, 1), (0, 2), (0, 3)]))
+
+    def test_spider_legs_null_graph_raises(self):
+        with pytest.raises(nx.NetworkXPointlessConcept):
+            nx.spider_legs(nx.Graph())
