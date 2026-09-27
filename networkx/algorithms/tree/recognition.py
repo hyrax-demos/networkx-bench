@@ -75,7 +75,7 @@ becomes a useful notion.
 
 import networkx as nx
 
-__all__ = ["is_arborescence", "is_branching", "is_forest", "is_tree"]
+__all__ = ["is_arborescence", "is_branching", "is_forest", "is_spider", "is_tree"]
 
 
 @nx.utils.not_implemented_for("undirected")
@@ -271,3 +271,59 @@ def is_tree(G):
 
     # A connected graph with no cycles has n-1 edges.
     return len(G) - 1 == G.number_of_edges() and is_connected(G)
+
+
+@nx.utils.not_implemented_for("directed")
+@nx._dispatchable
+def is_spider(G):
+    """
+    Returns True if `G` is a spider.
+
+    A spider (also called a starlike tree or subdivided star) is a tree with
+    at most one node of degree three or more. Equivalently, it is a tree that
+    is the union of paths (the "legs") sharing a single common endpoint.
+
+    Parameters
+    ----------
+    G : undirected graph
+        The graph to test.
+
+    Returns
+    -------
+    b : bool
+        A boolean that is True if `G` is a spider.
+
+    Raises
+    ------
+    NetworkXNotImplemented
+        If `G` is directed.
+
+    NetworkXPointlessConcept
+        If `G` is empty.
+
+    Examples
+    --------
+    >>> G = nx.star_graph(3)
+    >>> nx.add_path(G, [1, 4, 5])
+    >>> nx.is_spider(G)
+    True
+    >>> G.add_edges_from([(4, 6), (4, 7)])  # second node of degree >= 3
+    >>> nx.is_spider(G)
+    False
+
+    Notes
+    -----
+    Every path graph and every star graph is a spider, as is the single-node
+    graph.
+
+    See Also
+    --------
+    is_tree
+
+    """
+    if not is_tree(G):
+        return False
+    branch_nodes = (n for n, d in G.degree() if d >= 3)
+    # A spider has at most one branch node: the second ``next`` must fail.
+    next(branch_nodes, None)
+    return next(branch_nodes, None) is None

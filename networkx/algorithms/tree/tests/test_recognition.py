@@ -172,3 +172,52 @@ def test_is_arborescense_empty_graph_raises():
     G = nx.DiGraph()
     with pytest.raises(nx.NetworkXPointlessConcept, match="G has no nodes."):
         nx.is_arborescence(G)
+
+
+class TestIsSpider:
+    @pytest.mark.parametrize(
+        "G",
+        [
+            nx.empty_graph(1),
+            nx.path_graph(2),
+            nx.path_graph(7),
+            nx.star_graph(5),
+            nx.MultiGraph(nx.star_graph(4)),
+        ],
+    )
+    def test_is_spider(self, G):
+        assert nx.is_spider(G)
+
+    def test_subdivided_star(self):
+        G = nx.star_graph(3)
+        nx.add_path(G, [1, 4, 5, 6])
+        nx.add_path(G, [2, 7])
+        assert nx.is_spider(G)
+
+    def test_two_branch_nodes(self):
+        G = nx.star_graph(3)
+        G.add_edges_from([(1, 4), (1, 5)])
+        assert not nx.is_spider(G)
+
+    @pytest.mark.parametrize(
+        "G",
+        [
+            nx.cycle_graph(4),
+            nx.empty_graph(2),  # disconnected
+            nx.complete_graph(4),
+            nx.MultiGraph([(0, 1), (0, 1)]),
+        ],
+    )
+    def test_not_tree(self, G):
+        assert not nx.is_spider(G)
+
+    @pytest.mark.parametrize("cls", [nx.DiGraph, nx.MultiDiGraph])
+    def test_directed_raises(self, cls):
+        G = cls([(0, 1), (0, 2)])
+        with pytest.raises(nx.NetworkXNotImplemented):
+            nx.is_spider(G)
+
+    @pytest.mark.parametrize("cls", [nx.Graph, nx.MultiGraph])
+    def test_null_graph_raises(self, cls):
+        with pytest.raises(nx.NetworkXPointlessConcept, match="G has no nodes."):
+            nx.is_spider(cls())
