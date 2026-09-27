@@ -19,6 +19,7 @@ Algorithms
    centrality
    chains
    chordal
+   claw
    clique
    clustering
    coloring
