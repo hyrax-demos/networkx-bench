@@ -80,6 +80,7 @@ __all__ = [
     "is_branching",
     "is_caterpillar",
     "is_forest",
+    "is_lobster",
     "is_tree",
 ]
 
@@ -322,6 +323,7 @@ def is_caterpillar(G):
     See Also
     --------
     is_tree
+    is_lobster
 
     Notes
     -----
@@ -350,3 +352,71 @@ def is_caterpillar(G):
         raise nx.NetworkXPointlessConcept("G has no nodes.")
 
     return nx.is_tree(G) and _is_caterpillar_tree(G)
+
+
+@nx.utils.not_implemented_for("directed")
+@nx._dispatchable
+def is_lobster(G):
+    """
+    Returns True if `G` is a lobster.
+
+    A lobster is a tree in which removing all leaves (degree-1 nodes)
+    leaves a caterpillar or nothing at all.
+
+    Parameters
+    ----------
+    G : undirected graph
+        The graph to test.
+
+    Returns
+    -------
+    b : bool
+        A boolean that is True if `G` is a lobster.
+
+    Raises
+    ------
+    NetworkXNotImplemented
+        If `G` is directed.
+
+    NetworkXPointlessConcept
+        If `G` is empty.
+
+    See Also
+    --------
+    is_tree
+    is_caterpillar
+
+    Notes
+    -----
+    Every caterpillar is a lobster. Graphs that are not trees, including
+    multigraphs with parallel edges, are not lobsters.
+
+    Examples
+    --------
+    A spider with three legs of length 2 is a lobster (but not a
+    caterpillar), because removing its leaves leaves a star:
+
+    >>> G = nx.Graph([(0, 1), (1, 2), (0, 3), (3, 4), (0, 5), (5, 6)])
+    >>> nx.is_lobster(G)
+    True
+
+    A spider with three legs of length 3 is not a lobster:
+
+    >>> G = nx.Graph()
+    >>> nx.add_path(G, [0, 1, 2, 3])
+    >>> nx.add_path(G, [0, 4, 5, 6])
+    >>> nx.add_path(G, [0, 7, 8, 9])
+    >>> nx.is_lobster(G)
+    False
+
+    """
+    if len(G) == 0:
+        raise nx.NetworkXPointlessConcept("G has no nodes.")
+
+    if not nx.is_tree(G):
+        return False
+
+    # Removing the leaves of a tree leaves a (possibly empty) tree; use a
+    # read-only subgraph view so that `G` is not modified.
+    remainder = G.subgraph([n for n, d in G.degree() if d > 1])
+    return len(remainder) == 0 or _is_caterpillar_tree(remainder)
