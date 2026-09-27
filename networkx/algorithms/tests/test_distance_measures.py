@@ -838,3 +838,257 @@ class TestKemenyConstant:
         G = nx.path_graph(n)
         K = nx.kemeny_constant(G)
         assert np.isclose(K, n**2 / 3 - 2 * n / 3 + 1 / 2)
+
+
+class TestDiameterPath:
+    def _assert_valid(self, G, path, weight=None):
+        assert nx.is_path(G, path)
+        length = nx.path_weight(G, path, weight) if weight else len(path) - 1
+        assert length == nx.diameter(G, weight=weight)
+        assert length == nx.shortest_path_length(G, path[0], path[-1], weight=weight)
+
+    def test_path_graph(self):
+        G = nx.path_graph(5)
+        assert nx.diameter_path(G) == [0, 1, 2, 3, 4]
+
+    def test_cycle_graph(self):
+        G = nx.cycle_graph(6)
+        path = nx.diameter_path(G)
+        self._assert_valid(G, path)
+        assert len(path) - 1 == 3
+        # ties broken by first pair in node order: (0, 3)
+        assert path[0] == 0
+        assert path[-1] == 3
+
+    def test_weighted_graph(self):
+        G = nx.Graph()
+        G.add_weighted_edges_from([(0, 1, 1), (1, 2, 1), (0, 2, 5), (2, 3, 10)])
+        path = nx.diameter_path(G, weight="weight")
+        assert path == [0, 1, 2, 3]
+        self._assert_valid(G, path, weight="weight")
+        # unweighted diameter differs
+        assert len(nx.diameter_path(G)) - 1 == nx.diameter(G) == 2
+
+    def test_weight_function(self):
+        G = nx.path_graph(4)
+        path = nx.diameter_path(G, weight=lambda u, v, d: 2)
+        assert path == [0, 1, 2, 3]
+
+    def test_single_node(self):
+        G = nx.Graph()
+        G.add_node("a")
+        assert nx.diameter_path(G) == ["a"]
+
+    def test_directed(self):
+        G = nx.DiGraph([(0, 1), (1, 2), (2, 0)])
+        path = nx.diameter_path(G)
+        assert path == [0, 1, 2]
+
+    def test_null_graph(self):
+        with pytest.raises(nx.NetworkXPointlessConcept):
+            nx.diameter_path(nx.Graph())
+
+    def test_disconnected(self):
+        G = nx.Graph([(0, 1), (2, 3)])
+        with pytest.raises(nx.NetworkXError, match="not connected"):
+            nx.diameter_path(G)
+
+    def test_not_strongly_connected(self):
+        G = nx.DiGraph([(0, 1), (1, 2)])
+        with pytest.raises(nx.NetworkXError, match="not strongly connected"):
+            nx.diameter_path(G)
+
+    @pytest.mark.parametrize(
+        "G",
+        [
+            nx.path_graph(7),
+            nx.cycle_graph(9),
+            nx.cycle_graph(10),
+            nx.star_graph(6),
+            nx.complete_graph(5),
+            nx.petersen_graph(),
+            nx.grid_2d_graph(4, 6),
+            nx.balanced_tree(2, 4),
+            nx.barbell_graph(4, 3),
+            nx.lollipop_graph(5, 4),
+            nx.hypercube_graph(4),
+            nx.karate_club_graph(),
+            nx.connected_watts_strogatz_graph(40, 4, 0.2, seed=42),
+        ],
+    )
+    @pytest.mark.parametrize("usebounds", [False, True])
+    def test_usebounds_generators(self, G, usebounds):
+        path = nx.diameter_path(G, usebounds=usebounds)
+        self._assert_valid(G, path)
+        assert len(path) - 1 == nx.diameter(G, usebounds=True)
+
+    def test_usebounds_single_node(self):
+        G = nx.Graph()
+        G.add_node("a")
+        assert nx.diameter_path(G, usebounds=True) == ["a"]
+
+    def test_usebounds_null_graph(self):
+        with pytest.raises(nx.NetworkXPointlessConcept):
+            nx.diameter_path(nx.Graph(), usebounds=True)
+
+    def test_usebounds_disconnected(self):
+        G = nx.Graph([(0, 1), (2, 3)])
+        with pytest.raises(nx.NetworkXError, match="not connected"):
+            nx.diameter_path(G, usebounds=True)
+
+    def test_usebounds_ignored_for_directed(self):
+        G = nx.DiGraph([(0, 1), (1, 2), (2, 0)])
+        assert nx.diameter_path(G, usebounds=True) == nx.diameter_path(G)
+
+    def test_usebounds_ignored_for_weighted(self):
+        G = nx.Graph()
+        G.add_weighted_edges_from([(0, 1, 1), (1, 2, 1), (0, 2, 5), (2, 3, 10)])
+        path = nx.diameter_path(G, weight="weight", usebounds=True)
+        assert path == nx.diameter_path(G, weight="weight") == [0, 1, 2, 3]
+
+
+class TestEccentricityDistribution:
+    def test_path_graph(self):
+        G = nx.path_graph(5)
+        assert nx.eccentricity_distribution(G) == {2: 1, 3: 2, 4: 2}
+
+    def test_keys_sorted(self):
+        G = nx.path_graph(5)
+        assert list(nx.eccentricity_distribution(G)) == [2, 3, 4]
+
+    def test_counts_sum_to_order(self):
+        G = nx.petersen_graph()
+        assert nx.eccentricity_distribution(G) == {2: 10}
+
+    def test_single_node(self):
+        G = nx.Graph()
+        G.add_node("a")
+        assert nx.eccentricity_distribution(G) == {0: 1}
+
+    def test_weighted(self):
+        G = nx.Graph()
+        G.add_weighted_edges_from([(0, 1, 1), (1, 2, 3)])
+        assert nx.eccentricity_distribution(G, weight="weight") == {3: 1, 4: 2}
+        assert nx.eccentricity_distribution(G) == {1: 1, 2: 2}
+
+    def test_weight_function(self):
+        G = nx.path_graph(3)
+        assert nx.eccentricity_distribution(G, weight=lambda u, v, d: 2) == {
+            2: 1,
+            4: 2,
+        }
+
+    def test_directed(self):
+        G = nx.DiGraph([(0, 1), (1, 2), (2, 0)])
+        assert nx.eccentricity_distribution(G) == {2: 3}
+
+    def test_null_graph(self):
+        with pytest.raises(
+            nx.NetworkXPointlessConcept, match="eccentricity distribution"
+        ):
+            nx.eccentricity_distribution(nx.Graph())
+
+    def test_disconnected(self):
+        G = nx.Graph([(0, 1), (2, 3)])
+        with pytest.raises(nx.NetworkXError, match="not connected"):
+            nx.eccentricity_distribution(G)
+
+    def test_not_strongly_connected(self):
+        G = nx.DiGraph([(0, 1), (1, 2)])
+        with pytest.raises(nx.NetworkXError, match="not strongly connected"):
+            nx.eccentricity_distribution(G)
+
+
+class TestPrecomputedEccentricity:
+    """Each eccentricity-based helper accepts a shared precomputed ``e``."""
+
+    def setup_method(self):
+        self.G = nx.Graph([(1, 2), (1, 3), (1, 4), (3, 4), (3, 5), (4, 5)])
+        self.e = nx.eccentricity(self.G)
+
+    @pytest.mark.parametrize(
+        "func",
+        [
+            nx.diameter,
+            nx.radius,
+            nx.periphery,
+            nx.center,
+            nx.diameter_path,
+            nx.eccentricity_distribution,
+        ],
+    )
+    def test_precomputed_matches_computed(self, func):
+        assert func(self.G, e=self.e) == func(self.G)
+
+    def test_precomputed_values(self):
+        G, e = self.G, self.e
+        assert nx.diameter(G, e=e) == 3
+        assert nx.radius(G, e=e) == 2
+        assert nx.periphery(G, e=e) == [2, 5]
+        assert nx.center(G, e=e) == [1, 3, 4]
+        assert nx.diameter_path(G, e=e) == [2, 1, 3, 5]
+        assert nx.eccentricity_distribution(G, e=e) == {2: 3, 3: 2}
+
+    def test_precomputed_is_used(self):
+        # A supplied e is trusted rather than recomputed.
+        G = nx.path_graph(4)
+        e = {0: 1, 1: 1, 2: 1, 3: 1}
+        assert nx.diameter(G, e=e) == 1
+        assert nx.radius(G, e=e) == 1
+        assert nx.periphery(G, e=e) == [0, 1, 2, 3]
+        assert nx.center(G, e=e) == [0, 1, 2, 3]
+        assert nx.eccentricity_distribution(G, e=e) == {1: 4}
+
+    def test_precomputed_weighted(self):
+        G = nx.Graph()
+        G.add_weighted_edges_from([(0, 1, 1), (1, 2, 1), (0, 2, 5), (2, 3, 10)])
+        e = nx.eccentricity(G, weight="weight")
+        path = nx.diameter_path(G, weight="weight", e=e)
+        assert path == nx.diameter_path(G, weight="weight") == [0, 1, 2, 3]
+        assert nx.eccentricity_distribution(
+            G, weight="weight", e=e
+        ) == nx.eccentricity_distribution(G, weight="weight")
+
+    def test_precomputed_directed(self):
+        G = nx.DiGraph([(0, 1), (1, 2), (2, 0)])
+        e = nx.eccentricity(G)
+        assert nx.diameter_path(G, e=e) == [0, 1, 2]
+        assert nx.eccentricity_distribution(G, e=e) == {2: 3}
+
+    def test_precomputed_with_usebounds(self):
+        G, e = self.G, self.e
+        assert nx.diameter(G, e=e, usebounds=True) == 3
+        assert nx.radius(G, e=e, usebounds=True) == 2
+        assert nx.diameter_path(G, e=e, usebounds=True) == [2, 1, 3, 5]
+
+    def test_extra_keys_ignored_by_distribution(self):
+        e = dict(self.e)
+        e["not a node"] = 99
+        assert nx.eccentricity_distribution(self.G, e=e) == {2: 3, 3: 2}
+
+    @pytest.mark.parametrize(
+        "func",
+        [
+            nx.diameter,
+            nx.radius,
+            nx.periphery,
+            nx.center,
+            nx.diameter_path,
+            nx.eccentricity_distribution,
+        ],
+    )
+    def test_incomplete_e_raises(self, func):
+        e = dict(self.e)
+        del e[5]
+        with pytest.raises(nx.NetworkXError, match="missing"):
+            func(self.G, e=e)
+
+    @pytest.mark.parametrize("func", [nx.diameter_path, nx.eccentricity_distribution])
+    def test_empty_e_null_graph(self, func):
+        with pytest.raises(nx.NetworkXPointlessConcept):
+            func(nx.Graph(), e={})
+
+    def test_diameter_path_disconnected_with_e(self):
+        G = nx.Graph([(0, 1), (2, 3)])
+        with pytest.raises(nx.NetworkXError, match="not connected"):
+            nx.diameter_path(G, e={0: 1, 1: 1, 2: 1, 3: 1})

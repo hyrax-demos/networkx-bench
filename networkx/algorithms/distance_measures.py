@@ -1,6 +1,7 @@
 """Graph diameter, radius, eccentricity and other properties."""
 
 import math
+from collections import Counter
 
 import networkx as nx
 from networkx.utils import not_implemented_for
@@ -8,6 +9,8 @@ from networkx.utils import not_implemented_for
 __all__ = [
     "eccentricity",
     "diameter",
+    "diameter_path",
+    "eccentricity_distribution",
     "harmonic_diameter",
     "radius",
     "periphery",
@@ -346,6 +349,30 @@ def eccentricity(G, v=None, sp=None, weight=None):
     return e
 
 
+def _eccentricities(G, e=None, weight=None):
+    """Return eccentricities of every node of G, computing them only if needed.
+
+    If `e` is None, the eccentricities are computed with
+    :func:`eccentricity`. Otherwise `e` is treated as a precomputed
+    eccentricity dictionary and returned unchanged after checking that it
+    has an entry for every node of `G`.
+
+    Raises
+    ------
+    NetworkXError
+        If `e` is supplied but is missing an entry for some node of `G`.
+    """
+    if e is None:
+        return eccentricity(G, weight=weight)
+    missing = [n for n in G if n not in e]
+    if missing:
+        raise nx.NetworkXError(
+            f"Precomputed eccentricity dictionary e is missing {len(missing)}"
+            f" node(s) of G, e.g. {missing[0]!r}"
+        )
+    return e
+
+
 @nx._dispatchable(edge_attrs="weight")
 def diameter(G, e=None, usebounds=False, weight=None):
     """Returns the diameter of the graph G.
@@ -358,7 +385,8 @@ def diameter(G, e=None, usebounds=False, weight=None):
        A graph
 
     e : eccentricity dictionary, optional
-      A precomputed dictionary of eccentricities.
+      A precomputed dictionary of eccentricities. It must contain every
+      node of `G`; otherwise a NetworkXError is raised.
 
     usebounds : bool, optional
         If `True`, use extrema bounding (see Notes) when computing the diameter
@@ -394,7 +422,8 @@ def diameter(G, e=None, usebounds=False, weight=None):
     Raises
     ------
     NetworkXError
-        If G has multiple components.
+        If G has multiple components, or if `e` is supplied but does not
+        contain every node of `G`.
     NetworkXPointlessConcept
         If G is a null graph.
 
@@ -417,9 +446,197 @@ def diameter(G, e=None, usebounds=False, weight=None):
     """
     if usebounds is True and e is None and not G.is_directed():
         return _extrema_bounding(G, compute="diameter", weight=weight)
-    if e is None:
-        e = eccentricity(G, weight=weight)
+    e = _eccentricities(G, e, weight=weight)
     return max(e.values())
+
+
+@nx._dispatchable(edge_attrs="weight")
+def diameter_path(G, weight=None, usebounds=False, e=None):
+    """Returns a shortest path whose length equals the diameter of G.
+
+    The diameter is the maximum eccentricity, i.e. the greatest shortest-path
+    distance between any pair of nodes. This function returns one shortest
+    path realizing that distance.
+
+    Parameters
+    ----------
+    G : NetworkX graph
+       A graph
+
+    weight : string, function, or None
+        If this is a string, then edge weights will be accessed via the
+        edge attribute with this key (that is, the weight of the edge
+        joining `u` to `v` will be ``G.edges[u, v][weight]``). If no
+        such edge attribute exists, the weight of the edge is assumed to
+        be one.
+
+        If this is a function, the weight of an edge is the value
+        returned by the function. The function must accept exactly three
+        positional arguments: the two endpoints of an edge and the
+        dictionary of edge attributes for that edge. The function must
+        return a number.
+
+        If this is None, every edge has weight/distance/cost 1.
+
+        Weights should be positive, since they are distances.
+
+    usebounds : bool, optional
+        If `True`, use extrema bounding (see Notes) to find the endpoints of
+        the path. `usebounds` is ignored if `G` is directed, if `weight` is
+        not `None`, or if `e` is not `None`. Default is `False`.
+
+    e : eccentricity dictionary, optional
+        A precomputed dictionary of eccentricities, e.g. from
+        :func:`eccentricity`, keyed by every node of `G`. If supplied, it
+        is used instead of recomputing eccentricities.
+
+    Returns
+    -------
+    path : list
+       List of nodes forming a shortest path from ``u`` to ``v`` whose length
+       equals the diameter. With ``usebounds=False``, ``(u, v)`` is the first
+       pair (in node iteration order of `G`, first by source, then by target)
+       whose shortest-path distance equals the diameter. With
+       ``usebounds=True``, the endpoints may differ, but the path length is
+       still the diameter. For a graph with a single node, the path is that
+       node.
+
+    Raises
+    ------
+    NetworkXError
+        If G is not connected (or not strongly connected, if G is directed),
+        or if `e` is supplied but does not contain every node of `G`.
+    NetworkXPointlessConcept
+        If G is a null graph.
+
+    Notes
+    -----
+    When ``usebounds=True``, a peripheral node ``u`` is found using the same
+    smart lower and upper eccentricity bounds as
+    ``nx.diameter(G, usebounds=True)``, which is often linear in the number of
+    nodes rather than quadratic. A single breadth-first search from ``u`` then
+    yields a node ``v`` at distance equal to the diameter, and the returned
+    path is a shortest path from ``u`` to ``v``.
+
+    Examples
+    --------
+    >>> G = nx.Graph([(1, 2), (1, 3), (1, 4), (3, 4), (3, 5), (4, 5)])
+    >>> nx.diameter_path(G)
+    [2, 1, 3, 5]
+    >>> len(nx.diameter_path(G, usebounds=True)) - 1
+    3
+
+    See Also
+    --------
+    diameter
+    eccentricity
+    """
+    if len(G) == 0:
+        raise nx.NetworkXPointlessConcept(
+            "Cannot compute diameter path of a null graph."
+        )
+
+    if usebounds is True and e is None and weight is None and not G.is_directed():
+        # _extrema_bounding raises NetworkXError if G is disconnected.
+        u = _extrema_bounding(G, compute="periphery")[0]
+        paths = nx.single_source_shortest_path(G, u)
+        v = max(G, key=lambda n: len(paths[n]))
+        return paths[v]
+
+    e = _eccentricities(G, e, weight=weight)
+    diam = max(e[n] for n in G)
+    # The first node (in node order) whose eccentricity is the diameter is
+    # the source of the first pair realizing the diameter.
+    u = next(n for n in G if e[n] == diam)
+    if weight is None:
+        paths = nx.single_source_shortest_path(G, u)
+        dist = {v: len(p) - 1 for v, p in paths.items()}
+    else:
+        dist, paths = nx.single_source_dijkstra(G, u, weight=weight)
+    if len(dist) != len(G):
+        # Only reachable with a caller-supplied `e`; eccentricity() already
+        # raises for disconnected graphs otherwise.
+        if G.is_directed():
+            msg = (
+                "Found infinite path length because the digraph is not"
+                " strongly connected"
+            )
+        else:
+            msg = "Found infinite path length because the graph is not connected"
+        raise nx.NetworkXError(msg)
+    # max returns the first node in node order attaining the maximum.
+    v = max(G, key=dist.__getitem__)
+    return paths[v]
+
+
+@nx._dispatchable(edge_attrs="weight")
+def eccentricity_distribution(G, weight=None, e=None):
+    """Returns the distribution of node eccentricities in G.
+
+    The eccentricity of a node v is the maximum distance from v to
+    all other nodes in G. This function counts how many nodes have each
+    eccentricity value.
+
+    Parameters
+    ----------
+    G : NetworkX graph
+       A graph
+
+    weight : string, function, or None
+        If this is a string, then edge weights will be accessed via the
+        edge attribute with this key (that is, the weight of the edge
+        joining `u` to `v` will be ``G.edges[u, v][weight]``). If no
+        such edge attribute exists, the weight of the edge is assumed to
+        be one.
+
+        If this is a function, the weight of an edge is the value
+        returned by the function. The function must accept exactly three
+        positional arguments: the two endpoints of an edge and the
+        dictionary of edge attributes for that edge. The function must
+        return a number.
+
+        If this is None, every edge has weight/distance/cost 1.
+
+        Weights should be positive, since they are distances.
+
+    e : eccentricity dictionary, optional
+        A precomputed dictionary of eccentricities, e.g. from
+        :func:`eccentricity`, keyed by every node of `G`. If supplied, it
+        is used instead of recomputing eccentricities.
+
+    Returns
+    -------
+    dist : dict
+       A dictionary mapping each eccentricity value to the number of nodes
+       with that eccentricity, with keys in increasing order.
+
+    Raises
+    ------
+    NetworkXError
+        If G is not connected (or not strongly connected, if G is directed),
+        or if `e` is supplied but does not contain every node of `G`.
+    NetworkXPointlessConcept
+        If G is a null graph.
+
+    Examples
+    --------
+    >>> G = nx.path_graph(5)
+    >>> nx.eccentricity_distribution(G)
+    {2: 1, 3: 2, 4: 2}
+
+    See Also
+    --------
+    eccentricity
+    diameter
+    radius
+    """
+    if len(G) == 0:
+        raise nx.NetworkXPointlessConcept(
+            "Cannot compute eccentricity distribution of a null graph."
+        )
+
+    e = _eccentricities(G, e, weight=weight)
+    return dict(sorted(Counter(e[n] for n in G).items()))
 
 
 @nx._dispatchable(edge_attrs="weight")
@@ -509,7 +726,8 @@ def periphery(G, e=None, usebounds=False, weight=None):
        A graph
 
     e : eccentricity dictionary, optional
-      A precomputed dictionary of eccentricities.
+      A precomputed dictionary of eccentricities. It must contain every
+      node of `G`; otherwise a NetworkXError is raised.
 
     usebounds : bool, optional
         If `True`, use extrema bounding (see Notes) when computing the periphery
@@ -562,8 +780,7 @@ def periphery(G, e=None, usebounds=False, weight=None):
     """
     if usebounds is True and e is None and not G.is_directed():
         return _extrema_bounding(G, compute="periphery", weight=weight)
-    if e is None:
-        e = eccentricity(G, weight=weight)
+    e = _eccentricities(G, e, weight=weight)
     diameter = max(e.values())
     p = [v for v in e if e[v] == diameter]
     return p
@@ -581,7 +798,8 @@ def radius(G, e=None, usebounds=False, weight=None):
        A graph
 
     e : eccentricity dictionary, optional
-      A precomputed dictionary of eccentricities.
+      A precomputed dictionary of eccentricities. It must contain every
+      node of `G`; otherwise a NetworkXError is raised.
 
     usebounds : bool, optional
         If `True`, use extrema bounding (see Notes) when computing the radius
@@ -617,7 +835,8 @@ def radius(G, e=None, usebounds=False, weight=None):
     Raises
     ------
     NetworkXError
-        If G has multiple components.
+        If G has multiple components, or if `e` is supplied but does not
+        contain every node of `G`.
     NetworkXPointlessConcept
         If G is a null graph.
 
@@ -637,8 +856,7 @@ def radius(G, e=None, usebounds=False, weight=None):
     """
     if usebounds is True and e is None and not G.is_directed():
         return _extrema_bounding(G, compute="radius", weight=weight)
-    if e is None:
-        e = eccentricity(G, weight=weight)
+    e = _eccentricities(G, e, weight=weight)
     return min(e.values())
 
 
@@ -654,7 +872,8 @@ def center(G, e=None, usebounds=False, weight=None):
        A graph
 
     e : eccentricity dictionary, optional
-      A precomputed dictionary of eccentricities.
+      A precomputed dictionary of eccentricities. It must contain every
+      node of `G`; otherwise a NetworkXError is raised.
 
     usebounds : bool, optional
         If `True`, use extrema bounding (see Notes) when computing the center
@@ -711,8 +930,7 @@ def center(G, e=None, usebounds=False, weight=None):
         return _extrema_bounding(G, compute="center", weight=weight)
     if e is None and weight is None and not G.is_directed() and nx.is_tree(G):
         return nx.tree.center(G)
-    if e is None:
-        e = eccentricity(G, weight=weight)
+    e = _eccentricities(G, e, weight=weight)
     radius = min(e.values())
     p = [v for v in e if e[v] == radius]
     return p

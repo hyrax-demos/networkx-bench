@@ -9,8 +9,10 @@ Distance Measures
    center
    centroid
    diameter
+   diameter_path
    harmonic_diameter
    eccentricity
+   eccentricity_distribution
    effective_graph_resistance
    kemeny_constant
    periphery
