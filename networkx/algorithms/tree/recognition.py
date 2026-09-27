@@ -291,7 +291,8 @@ def is_spider(G):
     Returns
     -------
     b : bool
-        A boolean that is True if `G` is a spider.
+        A boolean that is True if `G` is a spider. Graphs that are not trees,
+        including forests with more than one component, give False.
 
     Raises
     ------
@@ -299,7 +300,7 @@ def is_spider(G):
         If `G` is directed.
 
     NetworkXPointlessConcept
-        If `G` is empty.
+        If `G` is empty (has no nodes).
 
     Examples
     --------
@@ -309,6 +310,12 @@ def is_spider(G):
     True
     >>> G.add_edges_from([(4, 6), (4, 7)])  # second node of degree >= 3
     >>> nx.is_spider(G)
+    False
+
+    A forest with more than one tree is not a spider, even if every
+    component is:
+
+    >>> nx.is_spider(nx.disjoint_union(nx.path_graph(3), nx.path_graph(2)))
     False
 
     Notes

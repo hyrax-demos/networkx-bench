@@ -217,7 +217,8 @@ def _equal_width_histogram(values, bins):
     return counts, edges
 
 
-def weighted_degree_histogram(G, weight="weight", bins=10):
+@nx._dispatchable(edge_attrs="weight")
+def weighted_degree_histogram(G, weight="weight", bins=10, *, direction="total"):
     """Returns a histogram of the weighted node degrees using equal-width bins.
 
     Parameters
@@ -233,6 +234,12 @@ def weighted_degree_histogram(G, weight="weight", bins=10):
     bins : int, optional (default=10)
        The number of equal-width bins. Must be a positive integer.
 
+    direction : {"total", "in", "out"}, optional (default="total")
+       Which weighted degree to use for directed graphs: the weighted
+       in-degree (``"in"``), out-degree (``"out"``) or their sum
+       (``"total"``). Undirected graphs only support ``"total"``, which is
+       the ordinary weighted degree.
+
     Returns
     -------
     counts : list of int
@@ -247,7 +254,11 @@ def weighted_degree_histogram(G, weight="weight", bins=10):
     Raises
     ------
     ValueError
-       If `bins` is not a positive integer.
+       If `bins` is not a positive integer, or if `direction` is not one of
+       ``"total"``, ``"in"`` or ``"out"``.
+
+    NetworkXError
+       If `direction` is ``"in"`` or ``"out"`` and `G` is undirected.
 
     Notes
     -----
@@ -266,13 +277,35 @@ def weighted_degree_histogram(G, weight="weight", bins=10):
     >>> edges
     [1.0, 2.0, 3.0, 4.0]
 
+    For directed graphs, choose the in-, out- or total weighted degree:
+
+    >>> D = nx.DiGraph()
+    >>> D.add_weighted_edges_from([(0, 1, 2.0), (0, 2, 2.0)])
+    >>> nx.weighted_degree_histogram(D, bins=2, direction="out")
+    ([2, 1], [0.0, 2.0, 4.0])
+    >>> nx.weighted_degree_histogram(D, bins=2, direction="in")
+    ([1, 2], [0.0, 1.0, 2.0])
+
     See Also
     --------
     degree_histogram
     """
     if isinstance(bins, bool) or not isinstance(bins, int) or bins < 1:
         raise ValueError(f"bins must be a positive integer, got {bins!r}")
-    values = [d for _, d in G.degree(weight=weight)]
+    if direction == "total":
+        degree = G.degree
+    elif direction in ("in", "out"):
+        if not G.is_directed():
+            raise nx.NetworkXError(
+                f"direction={direction!r} is only defined for directed graphs; "
+                "use direction='total' for undirected graphs."
+            )
+        degree = G.in_degree if direction == "in" else G.out_degree
+    else:
+        raise ValueError(
+            f"direction must be one of 'total', 'in' or 'out', got {direction!r}"
+        )
+    values = [d for _, d in degree(weight=weight)]
     return _equal_width_histogram(values, bins)
 
 

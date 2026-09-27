@@ -507,3 +507,87 @@ class TestRelabelNodesByAttribute:
         G = nx.path_graph(2)
         H = nx.relabel_nodes_by_attribute(G, lambda n, d: str(n), default="z")
         assert nodes_equal(H.nodes, ["0", "1"])
+
+    def test_multidigraph_preserves_keys_and_attributes(self):
+        G = nx.MultiDiGraph(name="net")
+        G.add_edge(0, 1, key="k", weight=2)
+        G.add_edge(0, 1, key="j", color="red")
+        G.add_edge(1, 0, key="k", weight=5)
+        G.add_edge(1, 1, key=7)
+        nx.set_node_attributes(G, {0: "a", 1: "b"}, "name")
+        G.nodes[0]["size"] = 3
+        H = nx.relabel_nodes_by_attribute(G, "name")
+        assert type(H) is nx.MultiDiGraph
+        assert H.graph == {"name": "net"}
+        assert H.nodes["a"] == {"name": "a", "size": 3}
+        assert sorted(H.edges(keys=True, data=True), key=str) == sorted(
+            [
+                ("a", "b", "k", {"weight": 2}),
+                ("a", "b", "j", {"color": "red"}),
+                ("b", "a", "k", {"weight": 5}),
+                ("b", "b", 7, {}),
+            ],
+            key=str,
+        )
+        # The copy owns its attribute dictionaries.
+        H["a"]["b"]["k"]["weight"] = 99
+        H.nodes["a"]["size"] = 99
+        assert G[0][1]["k"]["weight"] == 2
+        assert G.nodes[0]["size"] == 3
+
+    def test_multidigraph_in_place_preserves_keys(self):
+        G = nx.MultiDiGraph(name="net")
+        G.add_edge(0, 1, key="k", weight=2)
+        G.add_edge(1, 0, key="j")
+        nx.set_node_attributes(G, {0: "a", 1: "b"}, "name")
+        H = nx.relabel_nodes_by_attribute(G, "name", copy=False)
+        assert H is G
+        assert G.graph == {"name": "net"}
+        assert sorted(G.edges(keys=True, data=True), key=str) == sorted(
+            [("a", "b", "k", {"weight": 2}), ("b", "a", "j", {})], key=str
+        )
+
+    @pytest.mark.parametrize(
+        "graph_type", [nx.Graph, nx.DiGraph, nx.MultiGraph, nx.MultiDiGraph]
+    )
+    def test_subgraph_view_copy(self, graph_type):
+        G = nx.path_graph(4, create_using=graph_type)
+        G.graph["name"] = "path"
+        G.add_edge(1, 2, weight=4)
+        nx.set_node_attributes(G, {n: f"n{n}" for n in G}, "name")
+        view = G.subgraph([1, 2, 3])
+        H = nx.relabel_nodes_by_attribute(view, "name")
+        assert type(H) is graph_type
+        assert not nx.is_frozen(H)
+        assert nodes_equal(H.nodes, ["n1", "n2", "n3"])
+        assert H.has_edge("n1", "n2") and H.has_edge("n2", "n3")
+        assert not H.has_node("n0")
+        assert H.graph["name"] == "path"
+        assert H.nodes["n1"] == {"name": "n1"}
+        if G.is_multigraph():
+            assert H["n1"]["n2"][1] == {"weight": 4}
+        else:
+            assert H["n1"]["n2"] == {"weight": 4}
+        # The underlying graph and the view are unchanged.
+        assert nodes_equal(G.nodes, [0, 1, 2, 3])
+        assert nodes_equal(view.nodes, [1, 2, 3])
+
+    @pytest.mark.parametrize(
+        "make_view",
+        [
+            lambda G: G.subgraph([0, 1]),
+            lambda G: nx.reverse_view(G),
+            lambda G: nx.freeze(nx.DiGraph(G)),
+        ],
+    )
+    def test_view_in_place_raises(self, make_view):
+        G = nx.path_graph(3, create_using=nx.DiGraph)
+        nx.set_node_attributes(G, {0: "a", 1: "b", 2: "c"}, "name")
+        view = make_view(G)
+        with pytest.raises(nx.NetworkXError, match="graph view or frozen graph"):
+            nx.relabel_nodes_by_attribute(view, "name", copy=False)
+        assert nodes_equal(G.nodes, [0, 1, 2])
+        assert nodes_equal(view.nodes, list(view.nodes))
+        # The same view relabels fine into a copy.
+        H = nx.relabel_nodes_by_attribute(view, "name")
+        assert set(H) == {view.nodes[n]["name"] for n in view}

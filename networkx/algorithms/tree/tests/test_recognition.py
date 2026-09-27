@@ -211,6 +211,25 @@ class TestIsSpider:
     def test_not_tree(self, G):
         assert not nx.is_spider(G)
 
+    @pytest.mark.parametrize("cls", [nx.Graph, nx.MultiGraph])
+    @pytest.mark.parametrize(
+        "edges",
+        [
+            [(0, 1), (2, 3)],  # two paths
+            [(0, 1), (0, 2), (0, 3), (4, 5), (4, 6), (4, 7)],  # two stars
+            [(0, 1), (0, 2), (0, 3)],  # a star plus isolated node 4
+        ],
+    )
+    def test_forest_not_tree_returns_false(self, cls, edges):
+        G = cls(edges)
+        G.add_node(4)
+        assert nx.is_forest(G)
+        assert not nx.is_tree(G)
+        assert nx.is_spider(G) is False
+
+    def test_forest_of_isolated_nodes_returns_false(self):
+        assert nx.is_spider(nx.empty_graph(3)) is False
+
     @pytest.mark.parametrize("cls", [nx.DiGraph, nx.MultiDiGraph])
     def test_directed_raises(self, cls):
         G = cls([(0, 1), (0, 2)])

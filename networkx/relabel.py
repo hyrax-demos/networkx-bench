@@ -154,6 +154,9 @@ def relabel_nodes_by_attribute(G, attr, *, copy=True, default=None):
 
     copy : bool (optional, default=True)
        If True return a relabeled copy, or if False relabel the nodes in place.
+       Graph views (such as those returned by :meth:`Graph.subgraph` or
+       :func:`reverse_view`) and frozen graphs cannot be modified, so they
+       can only be relabeled with ``copy=True``.
 
     default : hashable (optional, default=None)
        Label used for nodes that lack `attr`. If None, every node must
@@ -162,14 +165,17 @@ def relabel_nodes_by_attribute(G, attr, *, copy=True, default=None):
     Returns
     -------
     H : graph
-       The relabeled graph. If `copy` is False this is `G` itself.
+       The relabeled graph. If `copy` is False this is `G` itself. If `copy`
+       is True, `H` is a new graph of the same class as `G` (for a view, the
+       class of the underlying graph) that owns its data.
 
     Raises
     ------
     NetworkXError
-       If a node lacks `attr` and `default` is None, if a node's `attr`
-       value (or the value returned by a callable `attr`) is None, or if
-       two distinct nodes would be mapped to the same new label.
+       If `copy` is False and `G` is a graph view or frozen graph, if a node
+       lacks `attr` and `default` is None, if a node's `attr` value (or the
+       value returned by a callable `attr`) is None, or if two distinct
+       nodes would be mapped to the same new label.
 
     Examples
     --------
@@ -195,10 +201,31 @@ def relabel_nodes_by_attribute(G, attr, *, copy=True, default=None):
     >>> sorted(nx.relabel_nodes_by_attribute(G, lambda n, d: f"{d['name']}{n}"))
     ['a0', 'b1']
 
+    Multigraph edge keys and all graph, node and edge attributes are kept:
+
+    >>> G = nx.MultiDiGraph(name="net")
+    >>> G.add_edge(0, 1, key="k", weight=2)
+    'k'
+    >>> nx.set_node_attributes(G, {0: "a", 1: "b"}, "name")
+    >>> H = nx.relabel_nodes_by_attribute(G, "name")
+    >>> list(H.edges(keys=True, data=True))
+    [('a', 'b', 'k', {'weight': 2})]
+    >>> H.graph
+    {'name': 'net'}
+
+    Graph views can be relabeled into a new graph with ``copy=True``:
+
+    >>> sorted(nx.relabel_nodes_by_attribute(G.subgraph([0]), "name"))
+    ['a']
+
     Notes
     -----
     All validation is performed before any relabeling, so with
     ``copy=False`` the graph is left unmodified when an error is raised.
+    Graph, node and edge attribute dictionaries are copied into the new
+    graph when ``copy=True`` (a shallow copy, as in :func:`relabel_nodes`).
+    Because the new labels must be distinct, multigraph edge keys are never
+    renumbered.
     The relabeling itself is delegated to :func:`relabel_nodes`; see its
     documentation for how in-place relabeling handles overlapping labels.
 
@@ -207,6 +234,11 @@ def relabel_nodes_by_attribute(G, attr, *, copy=True, default=None):
     relabel_nodes
     convert_node_labels_to_integers
     """
+    if not copy and nx.is_frozen(G):
+        raise nx.NetworkXError(
+            "Cannot relabel a graph view or frozen graph in place. "
+            "Use copy=True to relabel into a new graph."
+        )
     mapping = {}
     owner = {}
     use_func = callable(attr)
