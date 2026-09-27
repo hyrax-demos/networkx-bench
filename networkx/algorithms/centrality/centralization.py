@@ -5,6 +5,8 @@ single graph-level score describing how strongly the graph is organized
 around its most central node.
 """
 
+import math
+
 import networkx as nx
 from networkx.utils.decorators import not_implemented_for
 
@@ -12,6 +14,7 @@ __all__ = [
     "betweenness_centralization",
     "closeness_centralization",
     "degree_centralization",
+    "eigenvector_centralization",
 ]
 
 
@@ -74,6 +77,7 @@ def degree_centralization(G):
     degree_centrality
     closeness_centralization
     betweenness_centralization
+    eigenvector_centralization
 
     Notes
     -----
@@ -165,6 +169,7 @@ def closeness_centralization(G):
     closeness_centrality
     degree_centralization
     betweenness_centralization
+    eigenvector_centralization
 
     Notes
     -----
@@ -249,6 +254,7 @@ def betweenness_centralization(G):
     betweenness_centrality
     degree_centralization
     closeness_centralization
+    eigenvector_centralization
 
     Notes
     -----
@@ -283,3 +289,106 @@ def betweenness_centralization(G):
         return 0.0
     centrality = nx.betweenness_centrality(G, normalized=True)
     return _freeman_centralization(centrality, n - 1)
+
+
+@not_implemented_for("directed")
+@not_implemented_for("multigraph")
+@nx._dispatchable
+def eigenvector_centralization(G):
+    r"""Compute the Freeman eigenvector centralization of a graph.
+
+    Eigenvector centralization [1]_ measures how far the eigenvector
+    centralities of the nodes deviate from the most central node, relative
+    to the largest possible deviation over all connected graphs with the
+    same number of nodes:
+
+    .. math::
+
+        C_E(G) = \frac{\sum_{v \in G} (c^* - c(v))}{((n - 1) - \sqrt{n - 1}) / \sqrt{2}}
+
+    where `c(v)` is the eigenvector centrality of `v` as computed by
+    :func:`~networkx.algorithms.centrality.eigenvector_centrality` (scaled to
+    unit Euclidean norm), `c^*` is its maximum over all nodes and `n` is the
+    number of nodes. In the star graph on `n` nodes the center has
+    eigenvector centrality `1 / \sqrt{2}` and each leaf has
+    `1 / \sqrt{2(n - 1)}`, so the denominator
+    `((n - 1) - \sqrt{n - 1}) / \sqrt{2}` is the theoretical maximum.
+
+    Parameters
+    ----------
+    G : graph
+        An undirected NetworkX graph without parallel edges.
+
+    Returns
+    -------
+    centralization : float
+        The eigenvector centralization of `G`, a value in [0, 1]. It is 1.0
+        for a star graph and 0.0 for any regular connected graph (for
+        example a complete graph). Graphs with fewer than 3 nodes have
+        centralization 0.0.
+
+    Raises
+    ------
+    NetworkXNotImplemented
+        If `G` is directed or is a multigraph.
+
+    NetworkXError
+        If `G` has at least 3 nodes and is not connected.
+
+    PowerIterationFailedConvergence
+        If the underlying power iteration does not converge.
+
+    See Also
+    --------
+    eigenvector_centrality
+    degree_centralization
+    closeness_centralization
+    betweenness_centralization
+
+    Notes
+    -----
+    Graphs with fewer than 3 nodes have centralization 0.0 by definition,
+    since the normalizing denominator would be zero. This holds even if
+    such a graph is disconnected.
+
+    Disconnected graphs with 3 or more nodes raise
+    :exc:`~networkx.NetworkXError`, because the leading eigenvector of a
+    disconnected graph is not unique and the star-based normalization
+    assumes a connected graph.
+
+    Edge weights are ignored. Self-loops are ignored as well: the result is
+    computed on `G` with its self-loops removed (`G` itself is not
+    modified), so that the star remains the theoretical maximum.
+
+    The eigenvector centralities are computed with a tighter tolerance than
+    the :func:`eigenvector_centrality` default so that the result is
+    accurate to well below the default :func:`pytest.approx` tolerance.
+
+    References
+    ----------
+    .. [1] Freeman, L. C. (1978).
+       Centrality in social networks conceptual clarification.
+       Social Networks 1(3):215-239.
+       https://doi.org/10.1016/0378-8733(78)90021-7
+
+    Examples
+    --------
+    >>> round(nx.eigenvector_centralization(nx.star_graph(4)), 4)
+    1.0
+    >>> round(nx.eigenvector_centralization(nx.complete_graph(5)), 4)
+    0.0
+    >>> round(nx.eigenvector_centralization(nx.path_graph(5)), 4)
+    0.5176
+    """
+    n = G.number_of_nodes()
+    if n < 3:
+        return 0.0
+    if not nx.is_connected(G):
+        raise nx.NetworkXError(
+            "eigenvector_centralization is not defined for disconnected graphs"
+        )
+    if nx.number_of_selfloops(G):
+        G = nx.restricted_view(G, [], list(nx.selfloop_edges(G)))
+    centrality = nx.eigenvector_centrality(G, max_iter=1000, tol=1.0e-10)
+    denom = ((n - 1) - math.sqrt(n - 1)) / math.sqrt(2)
+    return _freeman_centralization(centrality, denom)

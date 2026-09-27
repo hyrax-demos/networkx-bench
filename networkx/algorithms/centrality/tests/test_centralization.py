@@ -7,8 +7,13 @@ graph remains the maximum over all simple graphs on ``n`` nodes and the
 result therefore stays in [0, 1]. ``closeness_centralization`` raises
 :exc:`networkx.NetworkXError` for disconnected graphs with 3 or more nodes,
 because its star-based normalization assumes all distances are finite.
+``eigenvector_centralization`` likewise raises :exc:`networkx.NetworkXError`
+for disconnected graphs with 3 or more nodes, because the leading
+eigenvector is not unique there.
 Graphs with fewer than 3 nodes always give 0.0, even if disconnected.
 """
+
+import math
 
 import pytest
 
@@ -18,6 +23,11 @@ ALL_FUNCS = [
     nx.degree_centralization,
     nx.closeness_centralization,
     nx.betweenness_centralization,
+    nx.eigenvector_centralization,
+]
+CONNECTED_ONLY_FUNCS = [
+    nx.closeness_centralization,
+    nx.eigenvector_centralization,
 ]
 DISCONNECTED_OK_FUNCS = [
     nx.degree_centralization,
@@ -43,6 +53,9 @@ def test_complete_graph_is_zero(func, n):
         (nx.degree_centralization, 1 / 6),
         (nx.closeness_centralization, 19 / 45),
         (nx.betweenness_centralization, 5 / 12),
+        # Leading eigenvector of P5 is proportional to (1, sqrt3, 2, sqrt3, 1),
+        # so the sum of differences is sqrt3 - 1, divided by sqrt2.
+        (nx.eigenvector_centralization, (math.sqrt(3) - 1) / math.sqrt(2)),
     ],
 )
 def test_path_graph_5_hand_computed(func, expected):
@@ -103,10 +116,11 @@ class TestDisconnected:
         G = nx.Graph([(0, 1), (2, 3)])
         assert func(G) == pytest.approx(0.0)
 
-    def test_closeness_raises_on_disconnected(self):
+    @pytest.mark.parametrize("func", CONNECTED_ONLY_FUNCS)
+    def test_connected_only_raise_on_disconnected(self, func):
         G = nx.Graph([(0, 1), (2, 3)])
         with pytest.raises(nx.NetworkXError):
-            nx.closeness_centralization(G)
+            func(G)
 
     @pytest.mark.parametrize("func", DISCONNECTED_OK_FUNCS)
     def test_star_plus_isolated_nodes(self, func):
@@ -116,11 +130,12 @@ class TestDisconnected:
         assert isinstance(result, float)
         assert 0.0 <= result <= 1.0
 
-    def test_closeness_raises_on_star_plus_isolated_nodes(self):
+    @pytest.mark.parametrize("func", CONNECTED_ONLY_FUNCS)
+    def test_connected_only_raise_on_star_plus_isolated_nodes(self, func):
         G = nx.star_graph(3)
         G.add_nodes_from([10, 11])
         with pytest.raises(nx.NetworkXError):
-            nx.closeness_centralization(G)
+            func(G)
 
 
 @pytest.mark.parametrize("func", ALL_FUNCS)
@@ -130,8 +145,22 @@ class TestDisconnected:
 )
 def test_random_graphs_float_in_unit_interval(func, n, p, seed):
     G = nx.gnp_random_graph(n, p, seed=seed)
-    if func is nx.closeness_centralization and not nx.is_connected(G):
-        pytest.skip("closeness_centralization is undefined for disconnected graphs")
+    if func in CONNECTED_ONLY_FUNCS and not nx.is_connected(G):
+        pytest.skip(f"{func.__name__} is undefined for disconnected graphs")
     result = func(G)
     assert isinstance(result, float)
     assert 0.0 <= result <= 1.0
+
+
+@pytest.mark.parametrize(
+    "G",
+    [
+        nx.Graph(list(nx.star_graph(4).edges) + [(1, 1)]),
+        nx.Graph(list(nx.star_graph(4).edges) + [(0, 0)]),
+    ],
+    ids=["star-leaf-loop", "star-center-loop"],
+)
+def test_eigenvector_centralization_ignores_self_loops(G):
+    edges_before = set(G.edges)
+    assert nx.eigenvector_centralization(G) == pytest.approx(1.0)
+    assert set(G.edges) == edges_before

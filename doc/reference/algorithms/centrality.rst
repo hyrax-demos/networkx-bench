@@ -201,8 +201,8 @@ graph on the same number of nodes (the theoretical maximum). The result is a
 float in [0, 1]: 1.0 for a star and 0.0 for a complete graph. Graphs with fewer
 than 3 nodes return 0.0. Directed graphs and multigraphs are rejected with
 :exc:`~networkx.NetworkXNotImplemented`. On disconnected graphs, degree and
-betweenness centralization compute as usual, while closeness centralization
-raises :exc:`~networkx.NetworkXError`.
+betweenness centralization compute as usual, while closeness and eigenvector
+centralization raise :exc:`~networkx.NetworkXError`.
 
 .. autosummary::
    :toctree: generated/
@@ -210,3 +210,4 @@ raises :exc:`~networkx.NetworkXError`.
    degree_centralization
    closeness_centralization
    betweenness_centralization
+   eigenvector_centralization
