@@ -11,6 +11,7 @@ __all__ = [
     "bfs_successors",
     "descendants_at_distance",
     "k_hop_neighbors",
+    "all_k_hop_neighbors",
     "bfs_layers",
     "bfs_labeled_edges",
     "generic_bfs_edges",
@@ -601,9 +602,37 @@ def descendants_at_distance(G, source, distance):
     return set()
 
 
+def _k_hop_ball(adj, source, k):
+    """Return the set of nodes within `k` hops of `source` (inclusive).
+
+    Performs a single BFS from `source` over the adjacency mapping `adj`
+    (successors for directed graphs) that stops expanding after depth `k`.
+    """
+    seen = {source}
+    frontier = [source]
+    for _ in range(k):
+        next_frontier = []
+        for u in frontier:
+            for v in adj[u]:
+                if v not in seen:
+                    seen.add(v)
+                    next_frontier.append(v)
+        if not next_frontier:
+            break
+        frontier = next_frontier
+    return seen
+
+
+def _check_k(k):
+    if k is None:
+        raise TypeError("missing required argument: 'k'")
+    if k < 0:
+        raise ValueError(f"k must be non-negative, got {k}.")
+
+
 @nx._dispatchable
-def k_hop_neighbors(G, source, k, *, include_source=False):
-    """Returns the nodes within `k` hops of `source` in `G`.
+def k_hop_neighbors(G, source=None, k=None, *, sources=None, include_source=False):
+    """Returns the nodes within `k` hops of `source` (or of `sources`) in `G`.
 
     A node is within `k` hops of `source` if its unweighted shortest-path
     distance from `source` is at most `k`. For directed graphs, paths
@@ -618,31 +647,43 @@ def k_hop_neighbors(G, source, k, *, include_source=False):
     G : NetworkX graph
         A graph. Edge weights are ignored.
 
-    source : node in `G`
-        The node from which distances are measured.
+    source : node in `G`, optional
+        The node from which distances are measured. Exactly one of
+        `source` and `sources` must be given.
 
     k : int
         The maximum number of hops. Must be non-negative.
 
+    sources : iterable of nodes in `G`, optional (keyword-only)
+        If given, the result is the union of the `k`-hop neighborhoods of
+        every node in `sources`, i.e. the union of
+        ``k_hop_neighbors(G, s, k, include_source=include_source)`` over
+        each ``s`` in `sources`. With ``include_source=False`` a source is
+        still included if it lies within `k` hops of a *different* source.
+        Every source is validated before any traversal is performed.
+
     include_source : bool, optional (default=False)
-        If True, `source` itself (at distance 0) is included in the result.
+        If True, the source node(s) themselves (at distance 0) are
+        included in the result.
 
     Returns
     -------
     set
-        The nodes whose distance from `source` is at most `k`, excluding
-        `source` unless `include_source` is True.
+        The nodes whose distance from `source` (or from some node in
+        `sources`) is at most `k`, as described above.
 
     Raises
     ------
     NetworkXError
-        If `source` is not in `G`.
+        If `source`, or any node in `sources`, is not in `G`, or if both
+        or neither of `source` and `sources` are given.
 
     ValueError
         If `k` is negative.
 
     See Also
     --------
+    all_k_hop_neighbors
     descendants_at_distance
     bfs_layers
     single_source_shortest_path_length
@@ -657,17 +698,87 @@ def k_hop_neighbors(G, source, k, *, include_source=False):
     >>> D = nx.DiGraph([(0, 1), (1, 2), (3, 0)])
     >>> nx.k_hop_neighbors(D, 0, 2)
     {1, 2}
-    """
-    if source not in G:
-        raise nx.NetworkXError(f"The node {source} is not in the graph.")
-    if k < 0:
-        raise ValueError(f"k must be non-negative, got {k}.")
 
+    Pass `sources` to get the union of several neighborhoods:
+
+    >>> sorted(nx.k_hop_neighbors(nx.path_graph(7), k=1, sources=[1, 5]))
+    [0, 2, 4, 6]
+    >>> sorted(nx.k_hop_neighbors(nx.path_graph(7), k=1, sources=[1, 2]))
+    [0, 1, 2, 3]
+    """
+    if sources is None:
+        if source is None:
+            raise nx.NetworkXError("Either source or sources must be given.")
+        sources = [source]
+    else:
+        if source is not None:
+            raise nx.NetworkXError("Specify only one of source or sources.")
+        sources = list(sources)
+    for s in sources:
+        if s not in G:
+            raise nx.NetworkXError(f"The node {s} is not in the graph.")
+    _check_k(k)
+
+    adj = G._adj
     nodes = set()
-    for i, layer in enumerate(nx.bfs_layers(G, source)):
-        if i > k:
-            break
-        nodes.update(layer)
-    if not include_source:
-        nodes.discard(source)
+    for s in dict.fromkeys(sources):
+        ball = _k_hop_ball(adj, s, k)
+        if not include_source:
+            ball.discard(s)
+        nodes |= ball
     return nodes
+
+
+@nx._dispatchable
+def all_k_hop_neighbors(G, k, *, include_source=False):
+    """Returns the `k`-hop neighborhood of every node in `G`.
+
+    This is the bulk counterpart of :func:`k_hop_neighbors`: it runs one
+    BFS per node, each bounded to depth `k`, and is equivalent to
+    ``{n: k_hop_neighbors(G, n, k, include_source=include_source) for n in G}``.
+    For directed graphs, paths follow out-edges (successors).
+
+    Parameters
+    ----------
+    G : NetworkX graph
+        A graph. Edge weights are ignored.
+
+    k : int
+        The maximum number of hops. Must be non-negative.
+
+    include_source : bool, optional (default=False)
+        If True, each node is included in its own neighborhood.
+
+    Returns
+    -------
+    dict
+        A dictionary keyed by node whose values are the sets of nodes
+        within `k` hops of that node.
+
+    Raises
+    ------
+    ValueError
+        If `k` is negative.
+
+    See Also
+    --------
+    k_hop_neighbors
+
+    Examples
+    --------
+    >>> G = nx.path_graph(4)
+    >>> nx.all_k_hop_neighbors(G, 1)
+    {0: {1}, 1: {0, 2}, 2: {1, 3}, 3: {2}}
+    >>> D = nx.DiGraph([(0, 1), (1, 2)])
+    >>> nx.all_k_hop_neighbors(D, 2, include_source=True)
+    {0: {0, 1, 2}, 1: {1, 2}, 2: {2}}
+    """
+    _check_k(k)
+    adj = G._adj
+    result = {}
+    for n in G:
+        ball = _k_hop_ball(adj, n, k)
+        if not include_source:
+            ball.discard(n)
+        result[n] = ball
+    return result
