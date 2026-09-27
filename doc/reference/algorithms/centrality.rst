@@ -204,9 +204,18 @@ than 3 nodes return 0.0. Directed graphs and multigraphs are rejected with
 betweenness centralization compute as usual, while closeness and eigenvector
 centralization raise :exc:`~networkx.NetworkXError`.
 
+:func:`centralization` selects the index by name with its ``measure`` argument
+(``"degree"``, ``"closeness"``, ``"betweenness"`` or ``"eigenvector"``) and
+raises :exc:`ValueError` for any other name. All of these functions accept an
+optional ``weight`` argument. It is passed through as edge length for
+betweenness centralization; degree, closeness and eigenvector centralization
+raise :exc:`ValueError` if it is not ``None``, because with weights the star
+graph is no longer the theoretical maximum.
+
 .. autosummary::
    :toctree: generated/
 
+   centralization
    degree_centralization
    closeness_centralization
    betweenness_centralization

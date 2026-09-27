@@ -164,3 +164,115 @@ def test_eigenvector_centralization_ignores_self_loops(G):
     edges_before = set(G.edges)
     assert nx.eigenvector_centralization(G) == pytest.approx(1.0)
     assert set(G.edges) == edges_before
+
+
+MEASURES = ["degree", "closeness", "betweenness", "eigenvector"]
+WEIGHTED_MEASURES = ["betweenness"]
+UNWEIGHTED_MEASURES = [m for m in MEASURES if m not in WEIGHTED_MEASURES]
+MEASURE_FUNCS = dict(zip(MEASURES, ALL_FUNCS))
+PATH5_EXPECTED = {
+    "degree": 1 / 6,
+    "closeness": 19 / 45,
+    "betweenness": 5 / 12,
+    "eigenvector": (math.sqrt(3) - 1) / math.sqrt(2),
+}
+
+
+def _weighted_star_like_k4():
+    """K4 where every shortest weighted path goes through node 0."""
+    G = nx.complete_graph(4)
+    nx.set_edge_attributes(G, 3, "length")
+    for v in (1, 2, 3):
+        G[0][v]["length"] = 1
+    return G
+
+
+class TestCentralizationDispatcher:
+    def test_default_measure_is_degree(self):
+        G = nx.path_graph(5)
+        assert nx.centralization(G) == nx.degree_centralization(G)
+
+    @pytest.mark.parametrize("measure", MEASURES)
+    @pytest.mark.parametrize("k", [2, 3, 5, 10])
+    def test_star_graph_is_one(self, measure, k):
+        assert nx.centralization(nx.star_graph(k), measure=measure) == pytest.approx(
+            1.0
+        )
+
+    @pytest.mark.parametrize("measure", MEASURES)
+    @pytest.mark.parametrize("n", [3, 4, 5, 6])
+    def test_complete_graph_is_zero(self, measure, n):
+        result = nx.centralization(nx.complete_graph(n), measure=measure)
+        assert result == pytest.approx(0.0)
+
+    @pytest.mark.parametrize("measure", MEASURES)
+    def test_path_graph_5_hand_computed(self, measure):
+        result = nx.centralization(nx.path_graph(5), measure=measure)
+        assert result == pytest.approx(PATH5_EXPECTED[measure])
+
+    @pytest.mark.parametrize("measure", MEASURES)
+    def test_matches_measure_function(self, measure):
+        G = nx.gnp_random_graph(12, 0.4, seed=5)
+        assert nx.is_connected(G)
+        assert nx.centralization(G, measure=measure) == MEASURE_FUNCS[measure](G)
+
+    @pytest.mark.parametrize("measure", ["pagerank", "Degree", "", None, 3])
+    def test_unknown_measure_raises(self, measure):
+        with pytest.raises(ValueError, match="Unknown centralization measure"):
+            nx.centralization(nx.path_graph(5), measure=measure)
+
+    @pytest.mark.parametrize("measure", MEASURES)
+    def test_directed_raises(self, measure):
+        with pytest.raises(nx.NetworkXNotImplemented):
+            nx.centralization(nx.path_graph(4, create_using=nx.DiGraph), measure)
+
+
+class TestWeighted:
+    @pytest.mark.parametrize("measure", MEASURES)
+    def test_weight_none_ignores_edge_attributes(self, measure):
+        G = nx.path_graph(5)
+        nx.set_edge_attributes(G, {(0, 1): 10, (1, 2): 0.5}, "weight")
+        result = nx.centralization(G, measure=measure, weight=None)
+        assert result == pytest.approx(PATH5_EXPECTED[measure])
+
+    @pytest.mark.parametrize("measure", WEIGHTED_MEASURES)
+    def test_weighted_k4_behaves_like_star(self, measure):
+        G = _weighted_star_like_k4()
+        assert nx.centralization(G, measure=measure) == pytest.approx(0.0)
+        result = nx.centralization(G, measure=measure, weight="length")
+        assert result == pytest.approx(1.0)
+        assert MEASURE_FUNCS[measure](G, weight="length") == pytest.approx(1.0)
+
+    @pytest.mark.parametrize("measure", WEIGHTED_MEASURES)
+    def test_uniform_weights_match_unweighted(self, measure):
+        G = nx.path_graph(5)
+        nx.set_edge_attributes(G, 2.5, "length")
+        result = nx.centralization(G, measure=measure, weight="length")
+        assert result == pytest.approx(PATH5_EXPECTED[measure])
+
+    @pytest.mark.parametrize("measure", WEIGHTED_MEASURES)
+    @pytest.mark.parametrize("seed", [1, 2, 3])
+    def test_random_weights_in_unit_interval(self, measure, seed):
+        G = nx.gnp_random_graph(15, 0.3, seed=seed)
+        for i, (u, v) in enumerate(G.edges):
+            G[u][v]["length"] = 1 + (i * 7919 + seed) % 13
+        result = nx.centralization(G, measure=measure, weight="length")
+        assert isinstance(result, float)
+        assert 0.0 <= result <= 1.0
+
+    @pytest.mark.parametrize("measure", UNWEIGHTED_MEASURES)
+    def test_weight_rejected_by_dispatcher(self, measure):
+        G = _weighted_star_like_k4()
+        with pytest.raises(ValueError, match="does not support edge weights"):
+            nx.centralization(G, measure=measure, weight="length")
+
+    @pytest.mark.parametrize("measure", UNWEIGHTED_MEASURES)
+    def test_weight_rejected_by_measure_function(self, measure):
+        G = _weighted_star_like_k4()
+        with pytest.raises(ValueError, match="does not support edge weights"):
+            MEASURE_FUNCS[measure](G, weight="length")
+
+    @pytest.mark.parametrize("measure", UNWEIGHTED_MEASURES)
+    def test_weight_rejected_even_for_small_graphs(self, measure):
+        with pytest.raises(ValueError, match="does not support edge weights"):
+            nx.centralization(nx.path_graph(2), measure=measure, weight="weight")
