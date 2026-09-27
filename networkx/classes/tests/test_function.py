@@ -1073,6 +1073,9 @@ def test_graph_summary_empty_graph():
         "is_multigraph": False,
         "number_of_selfloops": 0,
         "number_of_isolates": 0,
+        "number_of_connected_components": 0,
+        "average_degree": 0.0,
+        "max_degree": 0,
     }
 
 
@@ -1088,6 +1091,9 @@ def test_graph_summary_directed_multigraph_with_selfloop():
         "is_multigraph": True,
         "number_of_selfloops": 1,
         "number_of_isolates": 1,
+        "number_of_connected_components": 2,
+        "average_degree": pytest.approx(2.0),
+        "max_degree": 4,
     }
 
 
@@ -1102,6 +1108,9 @@ def test_graph_summary_path_graph():
         "is_multigraph": False,
         "number_of_selfloops": 0,
         "number_of_isolates": 0,
+        "number_of_connected_components": 1,
+        "average_degree": pytest.approx(1.6),
+        "max_degree": 2,
     }
 
 
@@ -1114,6 +1123,48 @@ def test_graph_summary_include_subset():
     assert nx.graph_summary(G, include=iter(["is_directed"])) == {"is_directed": True}
     assert nx.graph_summary(G, include=[]) == {}
     assert nx.graph_summary(G, include=None) == nx.graph_summary(G)
+
+
+def test_graph_summary_empty_directed_graph():
+    summary = nx.graph_summary(
+        nx.DiGraph(),
+        include=["number_of_connected_components", "average_degree", "max_degree"],
+    )
+    assert summary == {
+        "number_of_connected_components": 0,
+        "average_degree": 0.0,
+        "max_degree": 0,
+    }
+    assert isinstance(summary["average_degree"], float)
+
+
+def test_graph_summary_disconnected_undirected():
+    # A triangle, a single edge and an isolated node: 3 components.
+    G = nx.Graph([(0, 1), (1, 2), (2, 0), (3, 4)])
+    G.add_node(5)
+    summary = nx.graph_summary(G)
+    assert summary["number_of_connected_components"] == 3
+    assert summary["average_degree"] == pytest.approx(8 / 6)
+    assert summary["max_degree"] == 2
+    assert summary["number_of_isolates"] == 1
+
+
+def test_graph_summary_directed_two_weak_components():
+    # 0 -> 1 -> 2 and 3 -> 4 <- 5: two weak (but five strong) components.
+    G = nx.DiGraph([(0, 1), (1, 2), (3, 4), (5, 4)])
+    summary = nx.graph_summary(
+        G, include=["max_degree", "average_degree", "number_of_connected_components"]
+    )
+    assert summary == {
+        "number_of_connected_components": 2,
+        "average_degree": pytest.approx(8 / 6),
+        "max_degree": 2,
+    }
+    assert list(summary) == [
+        "number_of_connected_components",
+        "average_degree",
+        "max_degree",
+    ]
 
 
 def test_graph_summary_include_unknown_key():

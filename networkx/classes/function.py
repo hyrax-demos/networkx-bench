@@ -1651,7 +1651,30 @@ _GRAPH_SUMMARY_FUNCS = {
     "is_multigraph": lambda G: G.is_multigraph(),
     "number_of_selfloops": lambda G: nx.number_of_selfloops(G),
     "number_of_isolates": lambda G: nx.number_of_isolates(G),
+    "number_of_connected_components": lambda G: _summary_number_of_components(G),
+    "average_degree": lambda G: _summary_average_degree(G),
+    "max_degree": lambda G: _summary_max_degree(G),
 }
+
+
+def _summary_number_of_components(G):
+    # Weak connectivity for directed graphs; 0 for the empty graph.
+    if G.is_directed():
+        return nx.number_weakly_connected_components(G)
+    return nx.number_connected_components(G)
+
+
+def _summary_average_degree(G):
+    # Mean (total, for directed graphs) degree; 0.0 for the empty graph.
+    n = len(G)
+    if n == 0:
+        return 0.0
+    return sum(d for _, d in G.degree()) / n
+
+
+def _summary_max_degree(G):
+    # Largest (total, for directed graphs) degree; 0 for the empty graph.
+    return max((d for _, d in G.degree()), default=0)
 
 
 def graph_summary(G, include=None):
@@ -1678,6 +1701,14 @@ def graph_summary(G, include=None):
         - ``"is_multigraph"``: whether `G` is a multigraph.
         - ``"number_of_selfloops"``: the number of selfloop edges in `G`.
         - ``"number_of_isolates"``: the number of isolated nodes in `G`.
+        - ``"number_of_connected_components"``: the number of connected
+          components of `G` (weakly connected components if `G` is
+          directed). This is 0 for the empty graph.
+        - ``"average_degree"``: the mean node degree of `G` as a float
+          (total in- plus out-degree for directed graphs). This is 0.0 for
+          the empty graph.
+        - ``"max_degree"``: the largest node degree of `G` (total in- plus
+          out-degree for directed graphs). This is 0 for the empty graph.
 
         Keys appear in the order listed above.
 
@@ -1688,7 +1719,8 @@ def graph_summary(G, include=None):
 
     See Also
     --------
-    describe, density, number_of_selfloops, number_of_isolates
+    describe, density, number_of_selfloops, number_of_isolates,
+    number_connected_components, number_weakly_connected_components
 
     Examples
     --------
@@ -1700,6 +1732,10 @@ def graph_summary(G, include=None):
     0.5
     >>> summary["number_of_isolates"]
     0
+    >>> summary["number_of_connected_components"]
+    1
+    >>> summary["average_degree"], summary["max_degree"]
+    (1.5, 2)
     >>> nx.graph_summary(G, include=["number_of_nodes", "is_directed"])
     {'number_of_nodes': 4, 'is_directed': False}
     """
