@@ -147,15 +147,17 @@ def relabel_nodes_by_attribute(G, attr, *, copy=True, default=None):
     G : graph
        A NetworkX graph
 
-    attr : hashable
-       Name of the node attribute whose value becomes the new node label.
+    attr : hashable or callable
+       Name of the node attribute whose value becomes the new node label,
+       or a function ``attr(node, data)`` called with each node and its
+       attribute dictionary that returns the new label for that node.
 
     copy : bool (optional, default=True)
        If True return a relabeled copy, or if False relabel the nodes in place.
 
     default : hashable (optional, default=None)
        Label used for nodes that lack `attr`. If None, every node must
-       have `attr`.
+       have `attr`. Ignored when `attr` is callable.
 
     Returns
     -------
@@ -166,8 +168,8 @@ def relabel_nodes_by_attribute(G, attr, *, copy=True, default=None):
     ------
     NetworkXError
        If a node lacks `attr` and `default` is None, if a node's `attr`
-       value is None, or if two distinct nodes would be mapped to the
-       same new label.
+       value (or the value returned by a callable `attr`) is None, or if
+       two distinct nodes would be mapped to the same new label.
 
     Examples
     --------
@@ -186,6 +188,13 @@ def relabel_nodes_by_attribute(G, attr, *, copy=True, default=None):
     >>> sorted(nx.relabel_nodes_by_attribute(G, "name", default="z"))
     ['a', 'z']
 
+    A callable computes each new label from the node and its data:
+
+    >>> G = nx.path_graph(2)
+    >>> nx.set_node_attributes(G, {0: "a", 1: "b"}, "name")
+    >>> sorted(nx.relabel_nodes_by_attribute(G, lambda n, d: f"{d['name']}{n}"))
+    ['a0', 'b1']
+
     Notes
     -----
     All validation is performed before any relabeling, so with
@@ -200,20 +209,29 @@ def relabel_nodes_by_attribute(G, attr, *, copy=True, default=None):
     """
     mapping = {}
     owner = {}
+    use_func = callable(attr)
     for n, data in G.nodes(data=True):
-        if attr in data:
-            new = data[attr]
-        elif default is not None:
-            new = default
+        if use_func:
+            new = attr(n, data)
+            if new is None:
+                raise nx.NetworkXError(
+                    f"The attr function returned None for node {n!r}, "
+                    "which is not a valid node label."
+                )
         else:
-            raise nx.NetworkXError(
-                f"Node {n!r} has no attribute {attr!r} and no default was given."
-            )
-        if new is None:
-            raise nx.NetworkXError(
-                f"Node {n!r} has attribute {attr!r} set to None, "
-                "which is not a valid node label."
-            )
+            if attr in data:
+                new = data[attr]
+            elif default is not None:
+                new = default
+            else:
+                raise nx.NetworkXError(
+                    f"Node {n!r} has no attribute {attr!r} and no default was given."
+                )
+            if new is None:
+                raise nx.NetworkXError(
+                    f"Node {n!r} has attribute {attr!r} set to None, "
+                    "which is not a valid node label."
+                )
         if new in owner:
             raise nx.NetworkXError(
                 f"Nodes {owner[new]!r} and {n!r} would both be relabeled to {new!r}."

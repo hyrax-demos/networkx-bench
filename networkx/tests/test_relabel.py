@@ -460,3 +460,50 @@ class TestRelabelNodesByAttribute:
         G.nodes[0]["name"] = "a"
         with pytest.raises(TypeError):
             nx.relabel_nodes_by_attribute(G, "name", False)
+
+    @pytest.mark.parametrize("copy", [True, False])
+    def test_callable_attr(self, copy):
+        G = nx.path_graph(3)
+        G.add_edge(0, 1, weight=5)
+        nx.set_node_attributes(G, {0: "a", 1: "b", 2: "c"}, "name")
+        H = nx.relabel_nodes_by_attribute(G, lambda n, d: f"{d['name']}{n}", copy=copy)
+        assert (H is G) is (not copy)
+        assert nodes_equal(H.nodes, ["a0", "b1", "c2"])
+        assert edges_equal(H.edges, [("a0", "b1"), ("b1", "c2")])
+        assert H["a0"]["b1"] == {"weight": 5}
+        assert H.nodes["a0"] == {"name": "a"}
+
+    def test_callable_receives_node_and_data(self):
+        G = nx.path_graph(2)
+        G.nodes[0]["x"] = 1
+        seen = []
+
+        def label(n, data):
+            seen.append((n, dict(data)))
+            return n + 10
+
+        H = nx.relabel_nodes_by_attribute(G, label)
+        assert nodes_equal(H.nodes, [10, 11])
+        assert sorted(seen) == [(0, {"x": 1}), (1, {})]
+
+    @pytest.mark.parametrize("copy", [True, False])
+    def test_callable_collision_raises(self, copy):
+        G = nx.path_graph(3)
+        nx.set_node_attributes(G, {0: "a", 1: "b", 2: "c"}, "name")
+        with pytest.raises(nx.NetworkXError, match="both be relabeled"):
+            nx.relabel_nodes_by_attribute(
+                G, lambda n, d: "even" if n % 2 == 0 else "odd", copy=copy
+            )
+        assert nodes_equal(G.nodes, [0, 1, 2])
+        assert edges_equal(G.edges, [(0, 1), (1, 2)])
+
+    def test_callable_returning_none_raises(self):
+        G = nx.path_graph(2)
+        with pytest.raises(nx.NetworkXError, match="None"):
+            nx.relabel_nodes_by_attribute(G, lambda n, d: None if n else "a")
+        assert nodes_equal(G.nodes, [0, 1])
+
+    def test_callable_ignores_default(self):
+        G = nx.path_graph(2)
+        H = nx.relabel_nodes_by_attribute(G, lambda n, d: str(n), default="z")
+        assert nodes_equal(H.nodes, ["0", "1"])
