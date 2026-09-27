@@ -9,6 +9,7 @@ __all__ = [
     "biconnected_components",
     "biconnected_component_edges",
     "is_biconnected",
+    "is_block_graph",
     "articulation_points",
 ]
 
@@ -92,6 +93,68 @@ def is_biconnected(G):
     else:
         # Multiple bicomponents
         return False
+
+
+@not_implemented_for("directed")
+@nx._dispatchable
+def is_block_graph(G):
+    """Returns True if `G` is a block graph, False otherwise.
+
+    A block graph (also called a clique tree) is an undirected graph in
+    which every biconnected component (block) is a clique. `G` need not be
+    connected: it is a block graph if and only if each of its connected
+    components is. Forests and complete graphs are block graphs, as are
+    graphs formed by gluing cliques together at cut vertices.
+
+    Self-loops and parallel edges are ignored.
+
+    Parameters
+    ----------
+    G : NetworkX Graph
+        An undirected graph.
+
+    Returns
+    -------
+    bool
+        True if every biconnected component of `G` is a clique,
+        False otherwise.
+
+    Raises
+    ------
+    NetworkXNotImplemented
+        If the input graph is directed.
+
+    Examples
+    --------
+    >>> G = nx.barbell_graph(4, 0)
+    >>> nx.is_block_graph(G)
+    True
+    >>> nx.is_block_graph(nx.cycle_graph(4))
+    False
+
+    See Also
+    --------
+    biconnected_components
+    is_biconnected
+
+    Notes
+    -----
+    The null graph and graphs without edges are trivially block graphs.
+    The running time is $O(n + m)$: one biconnected component
+    decomposition followed by an adjacency check of each block.
+
+    References
+    ----------
+    .. [1] Harary, F. (1963). "A characterization of block-graphs".
+           Canadian Mathematical Bulletin 6 (1): 1–6.
+           doi:10.4153/cmb-1963-001-x
+    """
+    for block in biconnected_components(G):
+        size = len(block) - 1
+        for u in block:
+            if sum(1 for v in G[u] if v != u and v in block) != size:
+                return False
+    return True
 
 
 @not_implemented_for("directed")

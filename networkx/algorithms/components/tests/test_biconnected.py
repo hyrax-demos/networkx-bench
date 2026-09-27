@@ -246,3 +246,65 @@ def test_connected_raise():
     with pytest.raises(NetworkXNotImplemented):
         next(nx.articulation_points(DG))
     pytest.raises(NetworkXNotImplemented, nx.is_biconnected, DG)
+
+
+class TestIsBlockGraph:
+    @pytest.mark.parametrize(
+        "G",
+        [
+            nx.Graph(),
+            nx.empty_graph(5),
+            nx.path_graph(6),
+            nx.star_graph(4),
+            nx.balanced_tree(2, 3),
+            nx.complete_graph(1),
+            nx.complete_graph(2),
+            nx.complete_graph(6),
+            nx.barbell_graph(4, 0),
+            nx.barbell_graph(5, 3),
+            nx.windmill_graph(4, 3),
+        ],
+    )
+    def test_block_graphs(self, G):
+        assert nx.is_block_graph(G)
+
+    @pytest.mark.parametrize(
+        "G",
+        [
+            nx.cycle_graph(4),
+            nx.cycle_graph(5),
+            nx.complete_bipartite_graph(2, 3),
+            nx.petersen_graph(),
+            nx.diamond_graph(),
+        ],
+    )
+    def test_not_block_graphs(self, G):
+        assert not nx.is_block_graph(G)
+
+    def test_disconnected(self):
+        G = nx.disjoint_union(nx.complete_graph(4), nx.path_graph(3))
+        assert nx.is_block_graph(G)
+        G = nx.disjoint_union(G, nx.cycle_graph(4))
+        assert not nx.is_block_graph(G)
+
+    def test_triangles_glued_at_cut_vertex(self):
+        G = nx.Graph([(0, 1), (1, 2), (2, 0), (2, 3), (3, 4), (4, 2)])
+        assert nx.is_block_graph(G)
+        G.add_edge(0, 4)
+        assert not nx.is_block_graph(G)
+
+    def test_self_loops_and_multiedges_ignored(self):
+        G = nx.MultiGraph(nx.complete_graph(3))
+        G.add_edge(0, 1)
+        G.add_edge(2, 2)
+        assert nx.is_block_graph(G)
+        G = nx.MultiGraph(nx.cycle_graph(4))
+        G.add_edge(0, 1)
+        G.add_edge(0, 0)
+        assert not nx.is_block_graph(G)
+
+    def test_directed_raises(self):
+        with pytest.raises(NetworkXNotImplemented):
+            nx.is_block_graph(nx.DiGraph())
+        with pytest.raises(NetworkXNotImplemented):
+            nx.is_block_graph(nx.MultiDiGraph())

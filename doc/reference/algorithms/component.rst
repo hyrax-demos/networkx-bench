@@ -58,6 +58,7 @@ Biconnected components
    :toctree: generated/
 
    is_biconnected
+   is_block_graph
    biconnected_components
    biconnected_component_edges
    articulation_points

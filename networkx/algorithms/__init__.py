@@ -6,6 +6,7 @@ from networkx.algorithms.bridges import *
 from networkx.algorithms.chains import *
 from networkx.algorithms.centrality import *
 from networkx.algorithms.chordal import *
+from networkx.algorithms.claw import *
 from networkx.algorithms.cluster import *
 from networkx.algorithms.clique import *
 from networkx.algorithms.communicability_alg import *
@@ -51,6 +52,7 @@ from networkx.algorithms.smallworld import *
 from networkx.algorithms.smetric import *
 from networkx.algorithms.structuralholes import *
 from networkx.algorithms.sparsifiers import *
+from networkx.algorithms.split import *
 from networkx.algorithms.summarization import *
 from networkx.algorithms.swap import *
 from networkx.algorithms.time_dependent import *
