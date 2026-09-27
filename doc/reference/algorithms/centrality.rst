@@ -14,6 +14,7 @@ Degree
    degree_centrality
    in_degree_centrality
    out_degree_centrality
+   degree_centralization
 
 .. _networkx.algorithms.centrality.eigenvector:
 .. _networkx.algorithms.centrality.katz:

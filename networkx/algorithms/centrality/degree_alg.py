@@ -3,7 +3,12 @@
 import networkx as nx
 from networkx.utils.decorators import not_implemented_for
 
-__all__ = ["degree_centrality", "in_degree_centrality", "out_degree_centrality"]
+__all__ = [
+    "degree_centrality",
+    "degree_centralization",
+    "in_degree_centrality",
+    "out_degree_centrality",
+]
 
 
 @nx._dispatchable
@@ -162,3 +167,70 @@ def out_degree_centrality(G):
     s = 1.0 / (len(G) - 1.0)
     centrality = {n: d * s for n, d in G.out_degree()}
     return centrality
+
+
+@not_implemented_for("directed")
+@nx._dispatchable
+def degree_centralization(G):
+    r"""Compute Freeman's degree centralization of an undirected graph.
+
+    Degree centralization measures how strongly the edges of a graph are
+    concentrated around a single node. It is defined as
+
+    .. math::
+
+        C_D(G) = \frac{\sum_{v \in V} (d_{max} - d(v))}{(n - 1)(n - 2)}
+
+    where $d(v)$ is the degree of node $v$, $d_{max}$ is the maximum degree
+    in `G`, and $n$ is the number of nodes. The denominator is the largest
+    possible value of the numerator over all simple graphs with $n$ nodes,
+    which is attained by the star graph.
+
+    Parameters
+    ----------
+    G : graph
+        An undirected NetworkX graph.
+
+    Returns
+    -------
+    centralization : float
+        The degree centralization of `G`. For simple graphs the value lies
+        in [0, 1]; it is 1.0 for a star graph and 0.0 for any regular graph.
+        Graphs with fewer than 3 nodes have centralization 0.0.
+
+    Raises
+    ------
+    NetworkXNotImplemented
+        If `G` is directed.
+
+    Examples
+    --------
+    >>> G = nx.star_graph(4)
+    >>> nx.degree_centralization(G)
+    1.0
+    >>> nx.degree_centralization(nx.cycle_graph(5))
+    0.0
+    >>> nx.degree_centralization(nx.path_graph(4))
+    0.3333333333333333
+
+    See Also
+    --------
+    degree_centrality
+
+    Notes
+    -----
+    For multigraphs or graphs with self loops the maximum degree might be
+    higher than n-1 and values greater than 1 are possible.
+
+    References
+    ----------
+    .. [1] Freeman, L. C. (1978). Centrality in social networks conceptual
+       clarification. Social Networks, 1(3), 215-239.
+       https://doi.org/10.1016/0378-8733(78)90021-7
+    """
+    n = len(G)
+    if n < 3:
+        return 0.0
+    degrees = [d for _, d in G.degree()]
+    max_degree = max(degrees)
+    return sum(max_degree - d for d in degrees) / ((n - 1) * (n - 2))

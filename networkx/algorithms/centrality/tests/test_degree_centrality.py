@@ -142,3 +142,26 @@ class TestDegreeCentrality:
         assert {0: 1} == nx.degree_centrality(G)
         assert {0: 1} == nx.out_degree_centrality(G)
         assert {0: 1} == nx.in_degree_centrality(G)
+
+
+class TestDegreeCentralization:
+    def test_star_graph(self):
+        assert nx.degree_centralization(nx.star_graph(5)) == pytest.approx(1.0)
+
+    def test_cycle_graph(self):
+        assert nx.degree_centralization(nx.cycle_graph(6)) == pytest.approx(0.0)
+
+    def test_path_graph_4(self):
+        # degrees: 1, 2, 2, 1; max degree 2
+        # sum(max - d) = 1 + 0 + 0 + 1 = 2; (n - 1)(n - 2) = 3 * 2 = 6
+        assert nx.degree_centralization(nx.path_graph(4)) == pytest.approx(1 / 3)
+
+    @pytest.mark.parametrize("n", [0, 1, 2])
+    def test_small_graphs(self, n):
+        assert nx.degree_centralization(nx.path_graph(n)) == 0.0
+
+    @pytest.mark.parametrize("graph_type", [nx.DiGraph, nx.MultiDiGraph])
+    def test_directed_raises(self, graph_type):
+        G = nx.path_graph(4, create_using=graph_type)
+        with pytest.raises(nx.NetworkXNotImplemented):
+            nx.degree_centralization(G)
