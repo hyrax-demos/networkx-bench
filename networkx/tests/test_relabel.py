@@ -356,3 +356,98 @@ class TestRelabel:
         actual = {frozenset(e) for e in G.edges}
         expected = {frozenset(e) for e in [("a", 2), ("a", 3), ("b", 3)]}
         assert actual == expected
+
+
+class TestRelabelNodesByAttribute:
+    @pytest.mark.parametrize(
+        "graph_type", [nx.Graph, nx.DiGraph, nx.MultiGraph, nx.MultiDiGraph]
+    )
+    @pytest.mark.parametrize("copy", [True, False])
+    def test_basic(self, graph_type, copy):
+        G = nx.path_graph(3, create_using=graph_type)
+        G.graph["name"] = "path"
+        G.add_edge(0, 1, weight=7)
+        nx.set_node_attributes(G, {0: "a", 1: "b", 2: "c"}, "label")
+        G.nodes[0]["color"] = "red"
+        H = nx.relabel_nodes_by_attribute(G, "label", copy=copy)
+        assert (H is G) is (not copy)
+        assert nodes_equal(H.nodes, ["a", "b", "c"])
+        assert H.nodes["a"] == {"label": "a", "color": "red"}
+        assert H.has_edge("a", "b") and H.has_edge("b", "c")
+        assert H.graph["name"] == "path"
+        if copy:
+            assert nodes_equal(G.nodes, [0, 1, 2])
+
+    def test_edge_data_preserved(self):
+        G = nx.Graph()
+        G.add_edge(0, 1, weight=3)
+        nx.set_node_attributes(G, {0: "x", 1: "y"}, "name")
+        H = nx.relabel_nodes_by_attribute(G, "name")
+        assert H["x"]["y"] == {"weight": 3}
+
+    def test_default_for_missing_attribute(self):
+        G = nx.path_graph(3)
+        G.nodes[0]["name"] = "a"
+        G.nodes[1]["name"] = "b"
+        H = nx.relabel_nodes_by_attribute(G, "name", default="z")
+        assert nodes_equal(H.nodes, ["a", "b", "z"])
+        assert edges_equal(H.edges, [("a", "b"), ("b", "z")])
+
+    def test_missing_attribute_without_default_raises(self):
+        G = nx.path_graph(3)
+        G.nodes[0]["name"] = "a"
+        G.nodes[1]["name"] = "b"
+        with pytest.raises(nx.NetworkXError, match="no attribute"):
+            nx.relabel_nodes_by_attribute(G, "name")
+
+    def test_duplicate_labels_raise(self):
+        G = nx.path_graph(3)
+        nx.set_node_attributes(G, {0: "a", 1: "a", 2: "c"}, "name")
+        with pytest.raises(nx.NetworkXError, match="both be relabeled"):
+            nx.relabel_nodes_by_attribute(G, "name")
+
+    def test_default_collision_raises(self):
+        G = nx.path_graph(3)
+        G.nodes[0]["name"] = "a"
+        with pytest.raises(nx.NetworkXError, match="both be relabeled"):
+            nx.relabel_nodes_by_attribute(G, "name", default="z")
+
+    def test_default_collides_with_attribute_value(self):
+        G = nx.path_graph(2)
+        G.nodes[0]["name"] = "z"
+        with pytest.raises(nx.NetworkXError, match="both be relabeled"):
+            nx.relabel_nodes_by_attribute(G, "name", default="z")
+
+    def test_error_leaves_graph_unmodified_in_place(self):
+        G = nx.path_graph(3)
+        nx.set_node_attributes(G, {0: "a", 1: "b"}, "name")
+        with pytest.raises(nx.NetworkXError):
+            nx.relabel_nodes_by_attribute(G, "name", copy=False)
+        assert nodes_equal(G.nodes, [0, 1, 2])
+        assert edges_equal(G.edges, [(0, 1), (1, 2)])
+
+    def test_attribute_equal_to_own_label(self):
+        G = nx.path_graph(3)
+        nx.set_node_attributes(G, {0: 0, 1: "b", 2: 2}, "name")
+        H = nx.relabel_nodes_by_attribute(G, "name", copy=False)
+        assert nodes_equal(H.nodes, [0, "b", 2])
+        assert edges_equal(H.edges, [(0, "b"), ("b", 2)])
+
+    def test_swap_labels(self):
+        G = nx.path_graph(2)
+        nx.set_node_attributes(G, {0: 1, 1: 0}, "name")
+        G.nodes[0]["tag"] = "was0"
+        H = nx.relabel_nodes_by_attribute(G, "name")
+        assert H.nodes[1]["tag"] == "was0"
+        with pytest.raises(nx.NetworkXUnfeasible):
+            nx.relabel_nodes_by_attribute(G, "name", copy=False)
+
+    def test_empty_graph(self):
+        H = nx.relabel_nodes_by_attribute(nx.Graph(), "name")
+        assert len(H) == 0
+
+    def test_copy_is_keyword_only(self):
+        G = nx.path_graph(1)
+        G.nodes[0]["name"] = "a"
+        with pytest.raises(TypeError):
+            nx.relabel_nodes_by_attribute(G, "name", False)

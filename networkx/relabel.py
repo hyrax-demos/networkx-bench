@@ -1,6 +1,10 @@
 import networkx as nx
 
-__all__ = ["convert_node_labels_to_integers", "relabel_nodes"]
+__all__ = [
+    "convert_node_labels_to_integers",
+    "relabel_nodes",
+    "relabel_nodes_by_attribute",
+]
 
 
 @nx._dispatchable(
@@ -130,6 +134,87 @@ def relabel_nodes(G, mapping, copy=True):
         return _relabel_copy(G, m)
     else:
         return _relabel_inplace(G, m)
+
+
+@nx._dispatchable(
+    preserve_all_attrs=True, mutates_input={"not copy": 2}, returns_graph=True
+)
+def relabel_nodes_by_attribute(G, attr, *, copy=True, default=None):
+    """Relabel each node of `G` to the value of its node attribute `attr`.
+
+    Parameters
+    ----------
+    G : graph
+       A NetworkX graph
+
+    attr : hashable
+       Name of the node attribute whose value becomes the new node label.
+
+    copy : bool (optional, default=True)
+       If True return a relabeled copy, or if False relabel the nodes in place.
+
+    default : hashable (optional, default=None)
+       Label used for nodes that lack `attr`. If None, every node must
+       have `attr`.
+
+    Returns
+    -------
+    H : graph
+       The relabeled graph. If `copy` is False this is `G` itself.
+
+    Raises
+    ------
+    NetworkXError
+       If a node lacks `attr` and `default` is None, or if two distinct
+       nodes would be mapped to the same new label.
+
+    Examples
+    --------
+    >>> G = nx.path_graph(3)
+    >>> nx.set_node_attributes(G, {0: "a", 1: "b", 2: "c"}, "name")
+    >>> H = nx.relabel_nodes_by_attribute(G, "name")
+    >>> sorted(H)
+    ['a', 'b', 'c']
+    >>> sorted(H.edges)
+    [('a', 'b'), ('b', 'c')]
+
+    Nodes missing the attribute can fall back to a default label:
+
+    >>> G = nx.path_graph(2)
+    >>> G.nodes[0]["name"] = "a"
+    >>> sorted(nx.relabel_nodes_by_attribute(G, "name", default="z"))
+    ['a', 'z']
+
+    Notes
+    -----
+    All validation is performed before any relabeling, so with
+    ``copy=False`` the graph is left unmodified when an error is raised.
+    The relabeling itself is delegated to :func:`relabel_nodes`; see its
+    documentation for how in-place relabeling handles overlapping labels.
+
+    See Also
+    --------
+    relabel_nodes
+    convert_node_labels_to_integers
+    """
+    mapping = {}
+    owner = {}
+    for n, data in G.nodes(data=True):
+        if attr in data:
+            new = data[attr]
+        elif default is not None:
+            new = default
+        else:
+            raise nx.NetworkXError(
+                f"Node {n!r} has no attribute {attr!r} and no default was given."
+            )
+        if new in owner:
+            raise nx.NetworkXError(
+                f"Nodes {owner[new]!r} and {n!r} would both be relabeled to {new!r}."
+            )
+        owner[new] = n
+        mapping[n] = new
+    return relabel_nodes(G, mapping, copy=copy)
 
 
 def _relabel_inplace(G, mapping):
