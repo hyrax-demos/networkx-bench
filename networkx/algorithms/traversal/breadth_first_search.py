@@ -610,6 +610,9 @@ def k_hop_neighbors(G, source, k, *, include_source=False):
     follow out-edges (successors), so the result is the set of nodes
     reachable from `source` in at most `k` steps.
 
+    With ``include_source=True`` the result is equivalent to the keys of
+    ``single_source_shortest_path_length(G, source, cutoff=k)``.
+
     Parameters
     ----------
     G : NetworkX graph
@@ -642,6 +645,7 @@ def k_hop_neighbors(G, source, k, *, include_source=False):
     --------
     descendants_at_distance
     bfs_layers
+    single_source_shortest_path_length
 
     Examples
     --------
