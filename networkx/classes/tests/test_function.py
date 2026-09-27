@@ -11,6 +11,152 @@ def test_degree_histogram_empty():
     assert nx.degree_histogram(G) == []
 
 
+class TestWeightedDegreeHistogram:
+    def test_empty_graph(self):
+        assert nx.weighted_degree_histogram(nx.Graph()) == ([], [])
+
+    def test_basic(self):
+        G = nx.Graph()
+        G.add_weighted_edges_from([(0, 1, 1.0), (1, 2, 3.0)])
+        # weighted degrees: 0 -> 1.0, 1 -> 4.0, 2 -> 3.0
+        counts, edges = nx.weighted_degree_histogram(G, bins=3)
+        assert counts == [1, 0, 2]
+        assert edges == [1.0, 2.0, 3.0, 4.0]
+
+    def test_default_bins(self):
+        G = nx.path_graph(5)
+        nx.set_edge_attributes(G, 2, "weight")
+        counts, edges = nx.weighted_degree_histogram(G)
+        assert len(counts) == 10
+        assert len(edges) == 11
+        assert sum(counts) == 5
+        assert counts[0] == 2  # endpoints with weighted degree 2
+        assert counts[-1] == 3  # internal nodes with weighted degree 4 (right edge)
+        assert edges[0] == 2
+        assert edges[-1] == 4
+
+    def test_all_equal_degrees(self):
+        G = nx.cycle_graph(6)
+        counts, edges = nx.weighted_degree_histogram(G, bins=5)
+        assert sum(counts) == 6
+        assert sorted(counts) == [0, 0, 0, 0, 6]
+        assert len(edges) == 6
+        assert edges[0] == pytest.approx(1.5)
+        assert edges[-1] == pytest.approx(2.5)
+        i = counts.index(6)
+        assert edges[i] <= 2 < edges[i + 1]
+
+    def test_all_equal_single_bin(self):
+        G = nx.cycle_graph(4)
+        assert nx.weighted_degree_histogram(G, bins=1) == ([4], [1.5, 2.5])
+
+    def test_single_node(self):
+        G = nx.Graph()
+        G.add_node(0)
+        counts, edges = nx.weighted_degree_histogram(G, bins=2)
+        assert counts == [0, 1]
+        assert edges == [-0.5, 0.0, 0.5]
+
+    def test_custom_weight_and_none(self):
+        G = nx.Graph()
+        G.add_edge(0, 1, cost=10)
+        G.add_edge(1, 2, cost=10)
+        counts, edges = nx.weighted_degree_histogram(G, weight="cost", bins=2)
+        assert counts == [2, 1]
+        assert edges == [10.0, 15.0, 20.0]
+        counts, edges = nx.weighted_degree_histogram(G, weight=None, bins=2)
+        assert counts == [2, 1]
+        assert edges == [1.0, 1.5, 2.0]
+
+    def test_missing_weight_defaults_to_one(self):
+        G = nx.Graph()
+        G.add_edge(0, 1, weight=3)
+        G.add_edge(1, 2)
+        counts, edges = nx.weighted_degree_histogram(G, bins=3)
+        # weighted degrees: 0 -> 3, 1 -> 4, 2 -> 1
+        assert counts == [1, 0, 2]
+        assert edges == [1.0, 2.0, 3.0, 4.0]
+
+    def test_directed(self):
+        G = nx.DiGraph()
+        G.add_weighted_edges_from([(0, 1, 2.0), (0, 2, 2.0)])
+        counts, edges = nx.weighted_degree_histogram(G, bins=2)
+        assert counts == [2, 1]
+        assert edges == [2.0, 3.0, 4.0]
+
+    @pytest.mark.parametrize("graph_type", [nx.DiGraph, nx.MultiDiGraph])
+    def test_directed_direction(self, graph_type):
+        G = graph_type()
+        G.add_weighted_edges_from([(0, 1, 2.0), (0, 2, 2.0), (1, 2, 1.0)])
+        # out: 0 -> 4, 1 -> 1, 2 -> 0 ; in: 0 -> 0, 1 -> 2, 2 -> 3
+        # total: 0 -> 4, 1 -> 3, 2 -> 3
+        assert nx.weighted_degree_histogram(G, bins=2, direction="out") == (
+            [2, 1],
+            [0.0, 2.0, 4.0],
+        )
+        assert nx.weighted_degree_histogram(G, bins=3, direction="in") == (
+            [1, 0, 2],
+            [0.0, 1.0, 2.0, 3.0],
+        )
+        assert nx.weighted_degree_histogram(
+            G, bins=2, direction="total"
+        ) == nx.weighted_degree_histogram(G, bins=2)
+        assert nx.weighted_degree_histogram(G, bins=2) == ([2, 1], [3.0, 3.5, 4.0])
+
+    def test_directed_direction_unweighted(self):
+        G = nx.DiGraph([(0, 1), (0, 2), (0, 3)])
+        counts, edges = nx.weighted_degree_histogram(
+            G, weight=None, bins=3, direction="out"
+        )
+        assert counts == [3, 0, 1]
+        assert edges == [0.0, 1.0, 2.0, 3.0]
+
+    def test_directed_direction_on_view(self):
+        G = nx.DiGraph()
+        G.add_weighted_edges_from([(0, 1, 2.0), (1, 2, 5.0)])
+        R = nx.reverse_view(G)
+        assert nx.weighted_degree_histogram(
+            R, bins=2, direction="in"
+        ) == nx.weighted_degree_histogram(G, bins=2, direction="out")
+
+    def test_direction_total_undirected(self):
+        G = nx.path_graph(3)
+        assert nx.weighted_degree_histogram(
+            G, bins=2, direction="total"
+        ) == nx.weighted_degree_histogram(G, bins=2)
+
+    @pytest.mark.parametrize("direction", ["in", "out"])
+    def test_direction_undirected_raises(self, direction):
+        with pytest.raises(nx.NetworkXError, match="only defined for directed"):
+            nx.weighted_degree_histogram(nx.path_graph(3), direction=direction)
+
+    @pytest.mark.parametrize("direction", ["both", None, "IN"])
+    def test_invalid_direction(self, direction):
+        with pytest.raises(ValueError, match="direction must be one of"):
+            nx.weighted_degree_histogram(nx.DiGraph([(0, 1)]), direction=direction)
+
+    def test_direction_is_keyword_only(self):
+        with pytest.raises(TypeError):
+            nx.weighted_degree_histogram(nx.DiGraph([(0, 1)]), "weight", 2, "in")
+
+    def test_counts_sum_to_number_of_nodes(self):
+        G = nx.gnp_random_graph(30, 0.3, seed=42)
+        rng = random.Random(42)
+        for u, v in G.edges:
+            G[u][v]["weight"] = rng.random()
+        for bins in (1, 3, 7, 10):
+            counts, edges = nx.weighted_degree_histogram(G, bins=bins)
+            assert len(counts) == bins
+            assert len(edges) == bins + 1
+            assert sum(counts) == G.number_of_nodes()
+            assert edges == sorted(edges)
+
+    @pytest.mark.parametrize("bins", [0, -1, 2.5, True, "3"])
+    def test_invalid_bins(self, bins):
+        with pytest.raises(ValueError, match="bins must be a positive integer"):
+            nx.weighted_degree_histogram(nx.path_graph(3), bins=bins)
+
+
 class TestFunction:
     def setup_method(self):
         self.G = nx.Graph({0: [1, 2, 3], 1: [1, 2, 0], 4: []}, name="Test")

@@ -16,6 +16,27 @@ Recognition
    is_forest
    is_arborescence
    is_branching
+   is_spider
+   spider_legs
+
+A spider is a tree with at most one node of degree three or more.
+:func:`is_spider` can also report that branch node, and :func:`spider_legs`
+gives the leg lengths in descending order:
+
+>>> import networkx as nx
+>>> G = nx.star_graph(3)
+>>> nx.add_path(G, [1, 4, 5])
+>>> nx.add_path(G, [2, 6])
+>>> nx.is_spider(G, center=True)
+(True, 0)
+>>> nx.is_spider(nx.path_graph(4), center=True)
+(True, None)
+>>> nx.spider_legs(G)
+[3, 2, 1]
+>>> nx.spider_legs(nx.cycle_graph(4))
+Traceback (most recent call last):
+    ...
+networkx.exception.NetworkXError: G is not a spider.
 
 Branchings and Spanning Arborescences
 -------------------------------------

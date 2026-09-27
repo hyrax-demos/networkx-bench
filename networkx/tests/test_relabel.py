@@ -356,3 +356,238 @@ class TestRelabel:
         actual = {frozenset(e) for e in G.edges}
         expected = {frozenset(e) for e in [("a", 2), ("a", 3), ("b", 3)]}
         assert actual == expected
+
+
+class TestRelabelNodesByAttribute:
+    @pytest.mark.parametrize(
+        "graph_type", [nx.Graph, nx.DiGraph, nx.MultiGraph, nx.MultiDiGraph]
+    )
+    @pytest.mark.parametrize("copy", [True, False])
+    def test_basic(self, graph_type, copy):
+        G = nx.path_graph(3, create_using=graph_type)
+        G.graph["name"] = "path"
+        G.add_edge(0, 1, weight=7)
+        nx.set_node_attributes(G, {0: "a", 1: "b", 2: "c"}, "label")
+        G.nodes[0]["color"] = "red"
+        H = nx.relabel_nodes_by_attribute(G, "label", copy=copy)
+        assert (H is G) is (not copy)
+        assert nodes_equal(H.nodes, ["a", "b", "c"])
+        assert H.nodes["a"] == {"label": "a", "color": "red"}
+        assert H.has_edge("a", "b") and H.has_edge("b", "c")
+        assert H.graph["name"] == "path"
+        if copy:
+            assert nodes_equal(G.nodes, [0, 1, 2])
+
+    def test_edge_data_preserved(self):
+        G = nx.Graph()
+        G.add_edge(0, 1, weight=3)
+        nx.set_node_attributes(G, {0: "x", 1: "y"}, "name")
+        H = nx.relabel_nodes_by_attribute(G, "name")
+        assert H["x"]["y"] == {"weight": 3}
+
+    def test_default_for_missing_attribute(self):
+        G = nx.path_graph(3)
+        G.nodes[0]["name"] = "a"
+        G.nodes[1]["name"] = "b"
+        H = nx.relabel_nodes_by_attribute(G, "name", default="z")
+        assert nodes_equal(H.nodes, ["a", "b", "z"])
+        assert edges_equal(H.edges, [("a", "b"), ("b", "z")])
+
+    def test_missing_attribute_without_default_raises(self):
+        G = nx.path_graph(3)
+        G.nodes[0]["name"] = "a"
+        G.nodes[1]["name"] = "b"
+        with pytest.raises(nx.NetworkXError, match="no attribute"):
+            nx.relabel_nodes_by_attribute(G, "name")
+
+    def test_duplicate_labels_raise(self):
+        G = nx.path_graph(3)
+        nx.set_node_attributes(G, {0: "a", 1: "a", 2: "c"}, "name")
+        with pytest.raises(nx.NetworkXError, match="both be relabeled"):
+            nx.relabel_nodes_by_attribute(G, "name")
+
+    def test_default_collision_raises(self):
+        G = nx.path_graph(3)
+        G.nodes[0]["name"] = "a"
+        with pytest.raises(nx.NetworkXError, match="both be relabeled"):
+            nx.relabel_nodes_by_attribute(G, "name", default="z")
+
+    def test_default_collides_with_attribute_value(self):
+        G = nx.path_graph(2)
+        G.nodes[0]["name"] = "z"
+        with pytest.raises(nx.NetworkXError, match="both be relabeled"):
+            nx.relabel_nodes_by_attribute(G, "name", default="z")
+
+    def test_error_leaves_graph_unmodified_in_place(self):
+        G = nx.path_graph(3)
+        nx.set_node_attributes(G, {0: "a", 1: "b"}, "name")
+        with pytest.raises(nx.NetworkXError):
+            nx.relabel_nodes_by_attribute(G, "name", copy=False)
+        assert nodes_equal(G.nodes, [0, 1, 2])
+        assert edges_equal(G.edges, [(0, 1), (1, 2)])
+
+    @pytest.mark.parametrize("copy", [True, False])
+    def test_none_attribute_value_raises(self, copy):
+        G = nx.path_graph(3)
+        nx.set_node_attributes(G, {0: "a", 1: "b", 2: None}, "name")
+        with pytest.raises(nx.NetworkXError, match="None"):
+            nx.relabel_nodes_by_attribute(G, "name", copy=copy)
+        assert nodes_equal(G.nodes, [0, 1, 2])
+        assert edges_equal(G.edges, [(0, 1), (1, 2)])
+
+    def test_attribute_equal_to_own_label(self):
+        G = nx.path_graph(3)
+        nx.set_node_attributes(G, {0: 0, 1: "b", 2: 2}, "name")
+        H = nx.relabel_nodes_by_attribute(G, "name", copy=False)
+        assert nodes_equal(H.nodes, [0, "b", 2])
+        assert edges_equal(H.edges, [(0, "b"), ("b", 2)])
+
+    def test_swap_labels(self):
+        G = nx.path_graph(2)
+        nx.set_node_attributes(G, {0: 1, 1: 0}, "name")
+        G.nodes[0]["tag"] = "was0"
+        H = nx.relabel_nodes_by_attribute(G, "name")
+        assert H.nodes[1]["tag"] == "was0"
+        with pytest.raises(nx.NetworkXUnfeasible):
+            nx.relabel_nodes_by_attribute(G, "name", copy=False)
+
+    def test_empty_graph(self):
+        H = nx.relabel_nodes_by_attribute(nx.Graph(), "name")
+        assert len(H) == 0
+
+    def test_copy_is_keyword_only(self):
+        G = nx.path_graph(1)
+        G.nodes[0]["name"] = "a"
+        with pytest.raises(TypeError):
+            nx.relabel_nodes_by_attribute(G, "name", False)
+
+    @pytest.mark.parametrize("copy", [True, False])
+    def test_callable_attr(self, copy):
+        G = nx.path_graph(3)
+        G.add_edge(0, 1, weight=5)
+        nx.set_node_attributes(G, {0: "a", 1: "b", 2: "c"}, "name")
+        H = nx.relabel_nodes_by_attribute(G, lambda n, d: f"{d['name']}{n}", copy=copy)
+        assert (H is G) is (not copy)
+        assert nodes_equal(H.nodes, ["a0", "b1", "c2"])
+        assert edges_equal(H.edges, [("a0", "b1"), ("b1", "c2")])
+        assert H["a0"]["b1"] == {"weight": 5}
+        assert H.nodes["a0"] == {"name": "a"}
+
+    def test_callable_receives_node_and_data(self):
+        G = nx.path_graph(2)
+        G.nodes[0]["x"] = 1
+        seen = []
+
+        def label(n, data):
+            seen.append((n, dict(data)))
+            return n + 10
+
+        H = nx.relabel_nodes_by_attribute(G, label)
+        assert nodes_equal(H.nodes, [10, 11])
+        assert sorted(seen) == [(0, {"x": 1}), (1, {})]
+
+    @pytest.mark.parametrize("copy", [True, False])
+    def test_callable_collision_raises(self, copy):
+        G = nx.path_graph(3)
+        nx.set_node_attributes(G, {0: "a", 1: "b", 2: "c"}, "name")
+        with pytest.raises(nx.NetworkXError, match="both be relabeled"):
+            nx.relabel_nodes_by_attribute(
+                G, lambda n, d: "even" if n % 2 == 0 else "odd", copy=copy
+            )
+        assert nodes_equal(G.nodes, [0, 1, 2])
+        assert edges_equal(G.edges, [(0, 1), (1, 2)])
+
+    def test_callable_returning_none_raises(self):
+        G = nx.path_graph(2)
+        with pytest.raises(nx.NetworkXError, match="None"):
+            nx.relabel_nodes_by_attribute(G, lambda n, d: None if n else "a")
+        assert nodes_equal(G.nodes, [0, 1])
+
+    def test_callable_ignores_default(self):
+        G = nx.path_graph(2)
+        H = nx.relabel_nodes_by_attribute(G, lambda n, d: str(n), default="z")
+        assert nodes_equal(H.nodes, ["0", "1"])
+
+    def test_multidigraph_preserves_keys_and_attributes(self):
+        G = nx.MultiDiGraph(name="net")
+        G.add_edge(0, 1, key="k", weight=2)
+        G.add_edge(0, 1, key="j", color="red")
+        G.add_edge(1, 0, key="k", weight=5)
+        G.add_edge(1, 1, key=7)
+        nx.set_node_attributes(G, {0: "a", 1: "b"}, "name")
+        G.nodes[0]["size"] = 3
+        H = nx.relabel_nodes_by_attribute(G, "name")
+        assert type(H) is nx.MultiDiGraph
+        assert H.graph == {"name": "net"}
+        assert H.nodes["a"] == {"name": "a", "size": 3}
+        assert sorted(H.edges(keys=True, data=True), key=str) == sorted(
+            [
+                ("a", "b", "k", {"weight": 2}),
+                ("a", "b", "j", {"color": "red"}),
+                ("b", "a", "k", {"weight": 5}),
+                ("b", "b", 7, {}),
+            ],
+            key=str,
+        )
+        # The copy owns its attribute dictionaries.
+        H["a"]["b"]["k"]["weight"] = 99
+        H.nodes["a"]["size"] = 99
+        assert G[0][1]["k"]["weight"] == 2
+        assert G.nodes[0]["size"] == 3
+
+    def test_multidigraph_in_place_preserves_keys(self):
+        G = nx.MultiDiGraph(name="net")
+        G.add_edge(0, 1, key="k", weight=2)
+        G.add_edge(1, 0, key="j")
+        nx.set_node_attributes(G, {0: "a", 1: "b"}, "name")
+        H = nx.relabel_nodes_by_attribute(G, "name", copy=False)
+        assert H is G
+        assert G.graph == {"name": "net"}
+        assert sorted(G.edges(keys=True, data=True), key=str) == sorted(
+            [("a", "b", "k", {"weight": 2}), ("b", "a", "j", {})], key=str
+        )
+
+    @pytest.mark.parametrize(
+        "graph_type", [nx.Graph, nx.DiGraph, nx.MultiGraph, nx.MultiDiGraph]
+    )
+    def test_subgraph_view_copy(self, graph_type):
+        G = nx.path_graph(4, create_using=graph_type)
+        G.graph["name"] = "path"
+        G.add_edge(1, 2, weight=4)
+        nx.set_node_attributes(G, {n: f"n{n}" for n in G}, "name")
+        view = G.subgraph([1, 2, 3])
+        H = nx.relabel_nodes_by_attribute(view, "name")
+        assert type(H) is graph_type
+        assert not nx.is_frozen(H)
+        assert nodes_equal(H.nodes, ["n1", "n2", "n3"])
+        assert H.has_edge("n1", "n2") and H.has_edge("n2", "n3")
+        assert not H.has_node("n0")
+        assert H.graph["name"] == "path"
+        assert H.nodes["n1"] == {"name": "n1"}
+        if G.is_multigraph():
+            assert H["n1"]["n2"][1] == {"weight": 4}
+        else:
+            assert H["n1"]["n2"] == {"weight": 4}
+        # The underlying graph and the view are unchanged.
+        assert nodes_equal(G.nodes, [0, 1, 2, 3])
+        assert nodes_equal(view.nodes, [1, 2, 3])
+
+    @pytest.mark.parametrize(
+        "make_view",
+        [
+            lambda G: G.subgraph([0, 1]),
+            lambda G: nx.reverse_view(G),
+            lambda G: nx.freeze(nx.DiGraph(G)),
+        ],
+    )
+    def test_view_in_place_raises(self, make_view):
+        G = nx.path_graph(3, create_using=nx.DiGraph)
+        nx.set_node_attributes(G, {0: "a", 1: "b", 2: "c"}, "name")
+        view = make_view(G)
+        with pytest.raises(nx.NetworkXError, match="graph view or frozen graph"):
+            nx.relabel_nodes_by_attribute(view, "name", copy=False)
+        assert nodes_equal(G.nodes, [0, 1, 2])
+        assert nodes_equal(view.nodes, list(view.nodes))
+        # The same view relabels fine into a copy.
+        H = nx.relabel_nodes_by_attribute(view, "name")
+        assert set(H) == {view.nodes[n]["name"] for n in view}

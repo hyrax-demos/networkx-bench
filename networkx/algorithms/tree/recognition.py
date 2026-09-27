@@ -75,7 +75,14 @@ becomes a useful notion.
 
 import networkx as nx
 
-__all__ = ["is_arborescence", "is_branching", "is_forest", "is_tree"]
+__all__ = [
+    "is_arborescence",
+    "is_branching",
+    "is_forest",
+    "is_spider",
+    "is_tree",
+    "spider_legs",
+]
 
 
 @nx.utils.not_implemented_for("undirected")
@@ -271,3 +278,164 @@ def is_tree(G):
 
     # A connected graph with no cycles has n-1 edges.
     return len(G) - 1 == G.number_of_edges() and is_connected(G)
+
+
+def _spider_center(G):
+    """Return ``(is_spider, center)`` for an undirected graph `G`.
+
+    `center` is the unique node of degree three or more, or None when `G` is
+    not a spider or is a path (including the single-node graph).
+    Raises NetworkXPointlessConcept if `G` is empty (via `is_tree`).
+    """
+    if not is_tree(G):
+        return False, None
+    branch_nodes = (n for n, d in G.degree() if d >= 3)
+    center = next(branch_nodes, None)
+    # A spider has at most one branch node: the second ``next`` must fail.
+    if next(branch_nodes, None) is not None:
+        return False, None
+    return True, center
+
+
+@nx.utils.not_implemented_for("directed")
+@nx._dispatchable
+def is_spider(G, center=False):
+    """
+    Returns True if `G` is a spider.
+
+    A spider (also called a starlike tree or subdivided star) is a tree with
+    at most one node of degree three or more. Equivalently, it is a tree that
+    is the union of paths (the "legs") sharing a single common endpoint.
+
+    Parameters
+    ----------
+    G : undirected graph
+        The graph to test.
+
+    center : bool, optional (default=False)
+        If True, also return the branch node of the spider.
+
+    Returns
+    -------
+    b : bool
+        A boolean that is True if `G` is a spider. Graphs that are not trees,
+        including forests with more than one component, give False.
+
+    (b, c) : tuple
+        Returned instead of `b` when `center` is True. `c` is the unique node
+        of degree three or more, or None if `G` is a path (including the
+        single-node graph) or is not a spider.
+
+    Raises
+    ------
+    NetworkXNotImplemented
+        If `G` is directed.
+
+    NetworkXPointlessConcept
+        If `G` is empty (has no nodes).
+
+    Examples
+    --------
+    >>> G = nx.star_graph(3)
+    >>> nx.add_path(G, [1, 4, 5])
+    >>> nx.is_spider(G)
+    True
+    >>> nx.is_spider(G, center=True)
+    (True, 0)
+    >>> nx.is_spider(nx.path_graph(4), center=True)
+    (True, None)
+    >>> G.add_edges_from([(4, 6), (4, 7)])  # second node of degree >= 3
+    >>> nx.is_spider(G)
+    False
+    >>> nx.is_spider(G, center=True)
+    (False, None)
+
+    A forest with more than one tree is not a spider, even if every
+    component is:
+
+    >>> nx.is_spider(nx.disjoint_union(nx.path_graph(3), nx.path_graph(2)))
+    False
+
+    Notes
+    -----
+    Every path graph and every star graph is a spider, as is the single-node
+    graph.
+
+    See Also
+    --------
+    is_tree
+    spider_legs
+
+    """
+    result = _spider_center(G)
+    return result if center else result[0]
+
+
+@nx.utils.not_implemented_for("directed")
+@nx._dispatchable
+def spider_legs(G):
+    """
+    Returns the leg lengths of the spider `G`, sorted in descending order.
+
+    A leg is a path from the branch node (the unique node of degree three or
+    more) to a leaf; its length is its number of edges. A path graph has no
+    branch node and is treated as a single leg measured from one endpoint,
+    so a path on `n` nodes gives ``[n - 1]`` and the single-node graph
+    gives ``[]``.
+
+    Parameters
+    ----------
+    G : undirected graph
+        A spider.
+
+    Returns
+    -------
+    legs : list of int
+        The leg lengths, sorted in descending order.
+
+    Raises
+    ------
+    NetworkXNotImplemented
+        If `G` is directed.
+
+    NetworkXPointlessConcept
+        If `G` is empty (has no nodes).
+
+    NetworkXError
+        If `G` is not a spider.
+
+    Examples
+    --------
+    >>> G = nx.star_graph(3)
+    >>> nx.add_path(G, [1, 4, 5])
+    >>> nx.add_path(G, [2, 6])
+    >>> nx.spider_legs(G)
+    [3, 2, 1]
+    >>> nx.spider_legs(nx.star_graph(4))
+    [1, 1, 1, 1]
+    >>> nx.spider_legs(nx.path_graph(5))
+    [4]
+    >>> nx.spider_legs(nx.cycle_graph(4))
+    Traceback (most recent call last):
+        ...
+    networkx.exception.NetworkXError: G is not a spider.
+
+    See Also
+    --------
+    is_spider
+
+    """
+    spider, center = _spider_center(G)
+    if not spider:
+        raise nx.NetworkXError("G is not a spider.")
+    if center is None:
+        return [len(G) - 1] if len(G) > 1 else []
+    legs = []
+    for nbr in G[center]:
+        prev, node, length = center, nbr, 1
+        # Walk outward along the leg until reaching its leaf.
+        while G.degree(node) == 2:
+            prev, node = node, next(n for n in G[node] if n != prev)
+            length += 1
+        legs.append(length)
+    return sorted(legs, reverse=True)
