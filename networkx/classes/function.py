@@ -47,6 +47,7 @@ __all__ = [
     "path_weight",
     "is_path",
     "describe",
+    "graph_summary",
 ]
 
 
@@ -1573,6 +1574,53 @@ def describe(G, describe_hook=None):
     max_key_len = max(len(k) for k in info_dict)
     for key, val in info_dict.items():
         print(f"{key:<{max_key_len}} : {val}")
+
+
+def graph_summary(G):
+    """Returns a dictionary of basic structural properties of `G`.
+
+    Parameters
+    ----------
+    G : graph
+        A NetworkX graph.
+
+    Returns
+    -------
+    dict
+        A dictionary with the following keys:
+
+        - ``"number_of_nodes"``: the number of nodes in `G`.
+        - ``"number_of_edges"``: the number of edges in `G`.
+        - ``"density"``: the density of `G` (see :func:`density`).
+        - ``"is_directed"``: whether `G` is directed.
+        - ``"is_multigraph"``: whether `G` is a multigraph.
+        - ``"number_of_selfloops"``: the number of selfloop edges in `G`.
+        - ``"number_of_isolates"``: the number of isolated nodes in `G`.
+
+    See Also
+    --------
+    describe, density, number_of_selfloops, number_of_isolates
+
+    Examples
+    --------
+    >>> G = nx.path_graph(4)
+    >>> summary = nx.graph_summary(G)
+    >>> summary["number_of_nodes"], summary["number_of_edges"]
+    (4, 3)
+    >>> summary["density"]
+    0.5
+    >>> summary["number_of_isolates"]
+    0
+    """
+    return {
+        "number_of_nodes": nx.number_of_nodes(G),
+        "number_of_edges": nx.number_of_edges(G),
+        "density": nx.density(G),
+        "is_directed": nx.is_directed(G),
+        "is_multigraph": G.is_multigraph(),
+        "number_of_selfloops": nx.number_of_selfloops(G),
+        "number_of_isolates": nx.number_of_isolates(G),
+    }
 
 
 def _create_describe_info_dict(G):

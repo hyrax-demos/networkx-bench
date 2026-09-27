@@ -1062,3 +1062,44 @@ def test_restricted_view_multi(G):
     H = nx.restricted_view(G, [0, 2, 5], [(1, 2, 0), (3, 4, 0)])
     assert set(H.nodes()) == {1, 3, 4}
     assert set(H.edges()) == {(1, 1)}
+
+
+def test_graph_summary_empty_graph():
+    assert nx.graph_summary(nx.Graph()) == {
+        "number_of_nodes": 0,
+        "number_of_edges": 0,
+        "density": 0,
+        "is_directed": False,
+        "is_multigraph": False,
+        "number_of_selfloops": 0,
+        "number_of_isolates": 0,
+    }
+
+
+def test_graph_summary_directed_multigraph_with_selfloop():
+    G = nx.MultiDiGraph([(0, 1), (0, 1), (1, 1)])
+    G.add_node(2)
+    summary = nx.graph_summary(G)
+    assert summary == {
+        "number_of_nodes": 3,
+        "number_of_edges": 3,
+        "density": pytest.approx(0.5),
+        "is_directed": True,
+        "is_multigraph": True,
+        "number_of_selfloops": 1,
+        "number_of_isolates": 1,
+    }
+
+
+def test_graph_summary_path_graph():
+    G = nx.path_graph(5)
+    summary = nx.graph_summary(G)
+    assert summary == {
+        "number_of_nodes": 5,
+        "number_of_edges": 4,
+        "density": pytest.approx(0.4),
+        "is_directed": False,
+        "is_multigraph": False,
+        "number_of_selfloops": 0,
+        "number_of_isolates": 0,
+    }
