@@ -79,6 +79,24 @@ def test_multigraph_raises(func):
         func(G)
 
 
+@pytest.mark.parametrize(
+    ("G", "expected"),
+    [
+        # Self-loop on the path's end node must not change the value.
+        (nx.Graph(list(nx.path_graph(5).edges) + [(0, 0)]), 1 / 6),
+        # Self-loop on a star leaf must not lower the value below 1.
+        (nx.Graph(list(nx.star_graph(4).edges) + [(1, 1)]), 1.0),
+        # Self-loop on the star center must not be hidden by the clamp.
+        (nx.Graph(list(nx.star_graph(4).edges) + [(0, 0)]), 1.0),
+    ],
+    ids=["path5-leaf-loop", "star-leaf-loop", "star-center-loop"],
+)
+def test_degree_centralization_ignores_self_loops(G, expected):
+    edges_before = set(G.edges)
+    assert nx.degree_centralization(G) == pytest.approx(expected)
+    assert set(G.edges) == edges_before
+
+
 class TestDisconnected:
     @pytest.mark.parametrize("func", DISCONNECTED_OK_FUNCS)
     def test_two_disjoint_edges_is_zero(self, func):

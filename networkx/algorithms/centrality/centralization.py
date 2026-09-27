@@ -87,6 +87,10 @@ def degree_centralization(G):
     Multigraphs are rejected because parallel edges can push degree
     centrality above 1, which would break the [0, 1] guarantee.
 
+    Self-loops are ignored: a self-loop would add 2 to a node's degree
+    without connecting it to any other node, so the result is computed on
+    `G` with its self-loops removed (`G` itself is not modified).
+
     References
     ----------
     .. [1] Freeman, L. C. (1978).
@@ -106,6 +110,11 @@ def degree_centralization(G):
     n = G.number_of_nodes()
     if n < 3:
         return 0.0
+    if nx.number_of_selfloops(G):
+        # A self-loop adds 2 to a node's degree, which can push degree
+        # centrality past 1 and invalidate the star-based normalization.
+        # Ignore self-loops, as closeness and betweenness already do.
+        G = nx.restricted_view(G, [], list(nx.selfloop_edges(G)))
     return _freeman_centralization(nx.degree_centrality(G), n - 2)
 
 
