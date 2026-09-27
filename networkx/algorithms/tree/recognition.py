@@ -419,4 +419,9 @@ def is_lobster(G):
     # Removing the leaves of a tree leaves a (possibly empty) tree; use a
     # read-only subgraph view so that `G` is not modified.
     remainder = G.subgraph([n for n, d in G.degree() if d > 1])
+    # By definition, G is a lobster exactly when its leaf-stripped remainder
+    # is a caterpillar, so reuse the caterpillar check on the remainder rather
+    # than stripping leaves a second time and re-implementing the path test.
+    # The undecorated helper is used (not the public is_caterpillar) because
+    # the remainder may be empty, which is_caterpillar would reject.
     return len(remainder) == 0 or _is_caterpillar_tree(remainder)
