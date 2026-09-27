@@ -13,3 +13,4 @@ Cycles
    minimum_cycle_basis
    chordless_cycles
    girth
+   is_cactus

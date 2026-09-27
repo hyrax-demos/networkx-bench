@@ -980,3 +980,52 @@ class TestGirth:
     )
     def test_girth(self, G, expected):
         assert nx.girth(G) == expected
+
+
+class TestIsCactus:
+    @pytest.mark.parametrize(
+        "G",
+        (
+            nx.Graph([(0, 1)]),
+            nx.empty_graph(1),
+            nx.path_graph(5),
+            nx.star_graph(4),
+            nx.random_labeled_tree(10, seed=42),
+            nx.balanced_tree(2, 3),
+        ),
+    )
+    def test_trees(self, G):
+        assert nx.is_cactus(G)
+
+    def test_triangle(self):
+        assert nx.is_cactus(nx.cycle_graph(3))
+
+    def test_cycle_with_pendant(self):
+        G = nx.cycle_graph(5)
+        G.add_edge(0, 5)
+        assert nx.is_cactus(G)
+
+    def test_triangles_sharing_node(self):
+        G = nx.Graph([(0, 1), (1, 2), (2, 0), (2, 3), (3, 4), (4, 2)])
+        assert nx.is_cactus(G)
+
+    def test_triangles_sharing_edge(self):
+        G = nx.Graph([(0, 1), (1, 2), (2, 0), (1, 3), (3, 2)])
+        assert not nx.is_cactus(G)
+
+    def test_complete_graph_k4(self):
+        assert not nx.is_cactus(nx.complete_graph(4))
+
+    def test_disconnected(self):
+        G = nx.Graph(chain(cycle_edges(range(3)), cycle_edges(range(3, 6))))
+        assert not nx.is_cactus(G)
+        assert not nx.is_cactus(nx.empty_graph(2))
+
+    def test_null_graph(self):
+        with pytest.raises(nx.NetworkXPointlessConcept):
+            nx.is_cactus(nx.Graph())
+
+    @pytest.mark.parametrize("graph_type", (nx.DiGraph, nx.MultiGraph))
+    def test_not_implemented(self, graph_type):
+        with pytest.raises(nx.NetworkXNotImplemented):
+            nx.is_cactus(graph_type([(0, 1), (1, 2), (2, 0)]))
