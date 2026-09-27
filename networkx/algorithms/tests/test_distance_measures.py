@@ -897,3 +897,55 @@ class TestDiameterPath:
         G = nx.DiGraph([(0, 1), (1, 2)])
         with pytest.raises(nx.NetworkXError, match="not strongly connected"):
             nx.diameter_path(G)
+
+
+class TestEccentricityDistribution:
+    def test_path_graph(self):
+        G = nx.path_graph(5)
+        assert nx.eccentricity_distribution(G) == {2: 1, 3: 2, 4: 2}
+
+    def test_keys_sorted(self):
+        G = nx.path_graph(5)
+        assert list(nx.eccentricity_distribution(G)) == [2, 3, 4]
+
+    def test_counts_sum_to_order(self):
+        G = nx.petersen_graph()
+        assert nx.eccentricity_distribution(G) == {2: 10}
+
+    def test_single_node(self):
+        G = nx.Graph()
+        G.add_node("a")
+        assert nx.eccentricity_distribution(G) == {0: 1}
+
+    def test_weighted(self):
+        G = nx.Graph()
+        G.add_weighted_edges_from([(0, 1, 1), (1, 2, 3)])
+        assert nx.eccentricity_distribution(G, weight="weight") == {3: 1, 4: 2}
+        assert nx.eccentricity_distribution(G) == {1: 1, 2: 2}
+
+    def test_weight_function(self):
+        G = nx.path_graph(3)
+        assert nx.eccentricity_distribution(G, weight=lambda u, v, d: 2) == {
+            2: 1,
+            4: 2,
+        }
+
+    def test_directed(self):
+        G = nx.DiGraph([(0, 1), (1, 2), (2, 0)])
+        assert nx.eccentricity_distribution(G) == {2: 3}
+
+    def test_null_graph(self):
+        with pytest.raises(
+            nx.NetworkXPointlessConcept, match="eccentricity distribution"
+        ):
+            nx.eccentricity_distribution(nx.Graph())
+
+    def test_disconnected(self):
+        G = nx.Graph([(0, 1), (2, 3)])
+        with pytest.raises(nx.NetworkXError, match="not connected"):
+            nx.eccentricity_distribution(G)
+
+    def test_not_strongly_connected(self):
+        G = nx.DiGraph([(0, 1), (1, 2)])
+        with pytest.raises(nx.NetworkXError, match="not strongly connected"):
+            nx.eccentricity_distribution(G)

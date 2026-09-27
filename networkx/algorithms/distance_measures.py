@@ -1,6 +1,7 @@
 """Graph diameter, radius, eccentricity and other properties."""
 
 import math
+from collections import Counter
 
 import networkx as nx
 from networkx.utils import not_implemented_for
@@ -9,6 +10,7 @@ __all__ = [
     "eccentricity",
     "diameter",
     "diameter_path",
+    "eccentricity_distribution",
     "harmonic_diameter",
     "radius",
     "periphery",
@@ -508,6 +510,70 @@ def diameter_path(G, weight=None):
                 best_dist = d
                 best_path = paths[v]
     return best_path
+
+
+@nx._dispatchable(edge_attrs="weight")
+def eccentricity_distribution(G, weight=None):
+    """Returns the distribution of node eccentricities in G.
+
+    The eccentricity of a node v is the maximum distance from v to
+    all other nodes in G. This function counts how many nodes have each
+    eccentricity value.
+
+    Parameters
+    ----------
+    G : NetworkX graph
+       A graph
+
+    weight : string, function, or None
+        If this is a string, then edge weights will be accessed via the
+        edge attribute with this key (that is, the weight of the edge
+        joining `u` to `v` will be ``G.edges[u, v][weight]``). If no
+        such edge attribute exists, the weight of the edge is assumed to
+        be one.
+
+        If this is a function, the weight of an edge is the value
+        returned by the function. The function must accept exactly three
+        positional arguments: the two endpoints of an edge and the
+        dictionary of edge attributes for that edge. The function must
+        return a number.
+
+        If this is None, every edge has weight/distance/cost 1.
+
+        Weights should be positive, since they are distances.
+
+    Returns
+    -------
+    dist : dict
+       A dictionary mapping each eccentricity value to the number of nodes
+       with that eccentricity, with keys in increasing order.
+
+    Raises
+    ------
+    NetworkXError
+        If G is not connected (or not strongly connected, if G is directed).
+    NetworkXPointlessConcept
+        If G is a null graph.
+
+    Examples
+    --------
+    >>> G = nx.path_graph(5)
+    >>> nx.eccentricity_distribution(G)
+    {2: 1, 3: 2, 4: 2}
+
+    See Also
+    --------
+    eccentricity
+    diameter
+    radius
+    """
+    if len(G) == 0:
+        raise nx.NetworkXPointlessConcept(
+            "Cannot compute eccentricity distribution of a null graph."
+        )
+
+    e = nx.eccentricity(G, weight=weight)
+    return dict(sorted(Counter(e.values()).items()))
 
 
 @nx._dispatchable(edge_attrs="weight")
