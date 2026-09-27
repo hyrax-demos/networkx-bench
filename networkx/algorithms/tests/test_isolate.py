@@ -1,5 +1,7 @@
 """Unit tests for the :mod:`networkx.algorithms.isolates` module."""
 
+import pytest
+
 import networkx as nx
 
 
@@ -64,6 +66,28 @@ def test_pendant_nodes_directed_total_degree():
 def test_pendant_nodes_multigraph():
     G = nx.MultiGraph([(0, 1), (0, 1), (1, 2)])
     assert list(nx.pendant_nodes(G)) == [2]
+
+
+def test_pendant_nodes_nbunch_subset():
+    G = nx.path_graph(5)
+    assert list(nx.pendant_nodes(G, nbunch=[1, 2, 4])) == [4]
+    assert list(nx.pendant_nodes(G, nbunch=[1, 2, 3])) == []
+    assert sorted(nx.pendant_nodes(G, nbunch=G)) == [0, 4]
+    assert list(nx.pendant_nodes(G, nbunch=[])) == []
+    # A single node is accepted as nbunch.
+    assert list(nx.pendant_nodes(G, nbunch=0)) == [0]
+    assert list(nx.pendant_nodes(G, nbunch=2)) == []
+    # Degrees are measured in the full graph, not the induced subgraph.
+    D = nx.DiGraph([(0, 1), (1, 2), (3, 1)])
+    assert sorted(nx.pendant_nodes(D, nbunch=[0, 1, 3])) == [0, 3]
+
+
+def test_pendant_nodes_nbunch_missing_node():
+    G = nx.path_graph(3)
+    with pytest.raises(nx.NetworkXError, match="not in the graph"):
+        nx.pendant_nodes(G, nbunch=[0, 99])
+    with pytest.raises(nx.NetworkXError):
+        nx.pendant_nodes(G, nbunch=99)
 
 
 def test_number_of_pendant_nodes():
