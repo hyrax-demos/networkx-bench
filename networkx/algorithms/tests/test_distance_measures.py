@@ -898,6 +898,54 @@ class TestDiameterPath:
         with pytest.raises(nx.NetworkXError, match="not strongly connected"):
             nx.diameter_path(G)
 
+    @pytest.mark.parametrize(
+        "G",
+        [
+            nx.path_graph(7),
+            nx.cycle_graph(9),
+            nx.cycle_graph(10),
+            nx.star_graph(6),
+            nx.complete_graph(5),
+            nx.petersen_graph(),
+            nx.grid_2d_graph(4, 6),
+            nx.balanced_tree(2, 4),
+            nx.barbell_graph(4, 3),
+            nx.lollipop_graph(5, 4),
+            nx.hypercube_graph(4),
+            nx.karate_club_graph(),
+            nx.connected_watts_strogatz_graph(40, 4, 0.2, seed=42),
+        ],
+    )
+    @pytest.mark.parametrize("usebounds", [False, True])
+    def test_usebounds_generators(self, G, usebounds):
+        path = nx.diameter_path(G, usebounds=usebounds)
+        self._assert_valid(G, path)
+        assert len(path) - 1 == nx.diameter(G, usebounds=True)
+
+    def test_usebounds_single_node(self):
+        G = nx.Graph()
+        G.add_node("a")
+        assert nx.diameter_path(G, usebounds=True) == ["a"]
+
+    def test_usebounds_null_graph(self):
+        with pytest.raises(nx.NetworkXPointlessConcept):
+            nx.diameter_path(nx.Graph(), usebounds=True)
+
+    def test_usebounds_disconnected(self):
+        G = nx.Graph([(0, 1), (2, 3)])
+        with pytest.raises(nx.NetworkXError, match="not connected"):
+            nx.diameter_path(G, usebounds=True)
+
+    def test_usebounds_ignored_for_directed(self):
+        G = nx.DiGraph([(0, 1), (1, 2), (2, 0)])
+        assert nx.diameter_path(G, usebounds=True) == nx.diameter_path(G)
+
+    def test_usebounds_ignored_for_weighted(self):
+        G = nx.Graph()
+        G.add_weighted_edges_from([(0, 1, 1), (1, 2, 1), (0, 2, 5), (2, 3, 10)])
+        path = nx.diameter_path(G, weight="weight", usebounds=True)
+        assert path == nx.diameter_path(G, weight="weight") == [0, 1, 2, 3]
+
 
 class TestEccentricityDistribution:
     def test_path_graph(self):

@@ -426,7 +426,7 @@ def diameter(G, e=None, usebounds=False, weight=None):
 
 
 @nx._dispatchable(edge_attrs="weight")
-def diameter_path(G, weight=None):
+def diameter_path(G, weight=None, usebounds=False):
     """Returns a shortest path whose length equals the diameter of G.
 
     The diameter is the maximum eccentricity, i.e. the greatest shortest-path
@@ -455,13 +455,21 @@ def diameter_path(G, weight=None):
 
         Weights should be positive, since they are distances.
 
+    usebounds : bool, optional
+        If `True`, use extrema bounding (see Notes) to find the endpoints of
+        the path. `usebounds` is ignored if `G` is directed or if `weight` is
+        not `None`. Default is `False`.
+
     Returns
     -------
     path : list
-       List of nodes forming a shortest path from ``u`` to ``v``, where
-       ``(u, v)`` is the first pair (in node iteration order of `G`, first by
-       source, then by target) whose shortest-path distance equals the
-       diameter. For a graph with a single node, the path is that node.
+       List of nodes forming a shortest path from ``u`` to ``v`` whose length
+       equals the diameter. With ``usebounds=False``, ``(u, v)`` is the first
+       pair (in node iteration order of `G`, first by source, then by target)
+       whose shortest-path distance equals the diameter. With
+       ``usebounds=True``, the endpoints may differ, but the path length is
+       still the diameter. For a graph with a single node, the path is that
+       node.
 
     Raises
     ------
@@ -470,11 +478,22 @@ def diameter_path(G, weight=None):
     NetworkXPointlessConcept
         If G is a null graph.
 
+    Notes
+    -----
+    When ``usebounds=True``, a peripheral node ``u`` is found using the same
+    smart lower and upper eccentricity bounds as
+    ``nx.diameter(G, usebounds=True)``, which is often linear in the number of
+    nodes rather than quadratic. A single breadth-first search from ``u`` then
+    yields a node ``v`` at distance equal to the diameter, and the returned
+    path is a shortest path from ``u`` to ``v``.
+
     Examples
     --------
     >>> G = nx.Graph([(1, 2), (1, 3), (1, 4), (3, 4), (3, 5), (4, 5)])
     >>> nx.diameter_path(G)
     [2, 1, 3, 5]
+    >>> len(nx.diameter_path(G, usebounds=True)) - 1
+    3
 
     See Also
     --------
@@ -485,6 +504,13 @@ def diameter_path(G, weight=None):
         raise nx.NetworkXPointlessConcept(
             "Cannot compute diameter path of a null graph."
         )
+
+    if usebounds is True and weight is None and not G.is_directed():
+        # _extrema_bounding raises NetworkXError if G is disconnected.
+        u = _extrema_bounding(G, compute="periphery")[0]
+        paths = nx.single_source_shortest_path(G, u)
+        v = max(G, key=lambda n: len(paths[n]))
+        return paths[v]
 
     order = len(G)
     best_dist = None
