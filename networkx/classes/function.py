@@ -11,6 +11,7 @@ __all__ = [
     "edges",
     "degree",
     "degree_histogram",
+    "weighted_degree_histogram",
     "neighbors",
     "number_of_nodes",
     "number_of_edges",
@@ -183,6 +184,96 @@ def degree_histogram(G):
     """
     counts = Counter(d for _, d in G.degree)
     return [counts.get(i, 0) for i in range(max(counts) + 1 if counts else 0)]
+
+
+def _equal_width_histogram(values, bins):
+    """Bin `values` into `bins` equal-width bins without numpy.
+
+    Returns ``(counts, bin_edges)`` where ``len(bin_edges) == bins + 1``.
+    Bins are half-open ``[edge_i, edge_{i+1})`` except the last one, which
+    also includes its right edge. If all values are equal, the range is
+    widened to ``(value - 0.5, value + 0.5)`` so that exactly one bin is
+    non-empty. An empty `values` yields ``([], [])``.
+    """
+    if not values:
+        return [], []
+    lo = min(values)
+    hi = max(values)
+    if lo == hi:
+        lo = lo - 0.5
+        hi = hi + 0.5
+    span = hi - lo
+    edges = [lo + i * span / bins for i in range(bins)]
+    edges.append(hi)
+    counts = [0] * bins
+    for v in values:
+        idx = min(int((v - lo) * bins / span), bins - 1)
+        # Correct for floating point rounding against the computed edges.
+        if idx > 0 and v < edges[idx]:
+            idx -= 1
+        elif idx < bins - 1 and v >= edges[idx + 1]:
+            idx += 1
+        counts[idx] += 1
+    return counts, edges
+
+
+def weighted_degree_histogram(G, weight="weight", bins=10):
+    """Returns a histogram of the weighted node degrees using equal-width bins.
+
+    Parameters
+    ----------
+    G : NetworkX graph
+       A graph
+
+    weight : string or None, optional (default='weight')
+       The edge attribute holding the numerical value used as a weight.
+       Edges missing the attribute have weight 1. If None, every edge has
+       weight 1 and the plain degree is used.
+
+    bins : int, optional (default=10)
+       The number of equal-width bins. Must be a positive integer.
+
+    Returns
+    -------
+    counts : list of int
+       ``counts[i]`` is the number of nodes whose weighted degree falls in
+       bin ``i``.
+
+    bin_edges : list of float
+       The ``bins + 1`` bin edges. Bin ``i`` covers the half-open interval
+       ``[bin_edges[i], bin_edges[i + 1])``, except the last bin which also
+       includes ``bin_edges[-1]``.
+
+    Raises
+    ------
+    ValueError
+       If `bins` is not a positive integer.
+
+    Notes
+    -----
+    The bins span the range from the minimum to the maximum weighted degree.
+    If all nodes have the same weighted degree ``d``, the range is widened to
+    ``(d - 0.5, d + 0.5)`` so that a single bin is non-empty. For the null
+    graph, ``([], [])`` is returned.
+
+    Examples
+    --------
+    >>> G = nx.Graph()
+    >>> G.add_weighted_edges_from([(0, 1, 1.0), (1, 2, 3.0)])
+    >>> counts, edges = nx.weighted_degree_histogram(G, bins=3)
+    >>> counts
+    [1, 0, 2]
+    >>> edges
+    [1.0, 2.0, 3.0, 4.0]
+
+    See Also
+    --------
+    degree_histogram
+    """
+    if isinstance(bins, bool) or not isinstance(bins, int) or bins < 1:
+        raise ValueError(f"bins must be a positive integer, got {bins!r}")
+    values = [d for _, d in G.degree(weight=weight)]
+    return _equal_width_histogram(values, bins)
 
 
 def is_directed(G):
