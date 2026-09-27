@@ -68,6 +68,7 @@ Algorithms
    smallworld
    smetric
    sparsifiers
+   split
    structuralholes
    summarization
    swap

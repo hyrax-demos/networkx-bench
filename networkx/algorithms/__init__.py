@@ -51,6 +51,7 @@ from networkx.algorithms.smallworld import *
 from networkx.algorithms.smetric import *
 from networkx.algorithms.structuralholes import *
 from networkx.algorithms.sparsifiers import *
+from networkx.algorithms.split import *
 from networkx.algorithms.summarization import *
 from networkx.algorithms.swap import *
 from networkx.algorithms.time_dependent import *
