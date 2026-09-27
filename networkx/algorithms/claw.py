@@ -11,7 +11,7 @@ __all__ = ["is_claw_free"]
 @nx._dispatchable
 @not_implemented_for("directed")
 @not_implemented_for("multigraph")
-def is_claw_free(G):
+def is_claw_free(G, *, certificate=False):
     r"""Returns True if `G` is claw-free, else False.
 
     A *claw* is the complete bipartite graph $K_{1,3}$: a center node joined
@@ -24,10 +24,18 @@ def is_claw_free(G):
     G : NetworkX graph
         An undirected simple graph.
 
+    certificate : bool, optional (default=False)
+        If True, also return an induced claw witnessing that `G` is not
+        claw-free.
+
     Returns
     -------
-    bool
-        True if `G` is claw-free, False otherwise.
+    bool or tuple
+        If `certificate` is False, True if `G` is claw-free and False
+        otherwise. If `certificate` is True, a pair ``(is_claw_free, claw)``:
+        ``(True, None)`` if `G` is claw-free, and ``(False, (center,
+        (a, b, c)))`` otherwise, where `center` is adjacent to each of the
+        three distinct leaves `a`, `b`, `c`, and no two leaves are adjacent.
 
     Raises
     ------
@@ -40,6 +48,13 @@ def is_claw_free(G):
     True
     >>> nx.is_claw_free(nx.star_graph(3))
     False
+
+    With ``certificate=True`` an induced claw is returned on failure:
+
+    >>> nx.is_claw_free(nx.star_graph(3), certificate=True)
+    (False, (0, (1, 2, 3)))
+    >>> nx.is_claw_free(nx.path_graph(4), certificate=True)
+    (True, None)
 
     Notes
     -----
@@ -59,6 +74,14 @@ def is_claw_free(G):
        survey", Discrete Mathematics 164 (1997), 87--147.
        https://doi.org/10.1016/S0012-365X(96)00045-3
     """
+    claw = _find_claw(G)
+    if certificate:
+        return (claw is None, claw)
+    return claw is None
+
+
+def _find_claw(G):
+    """Return ``(center, (a, b, c))`` for an induced claw in `G`, or None."""
     adj = G._adj
     for v, nbrdict in adj.items():
         nbrs = [u for u in nbrdict if u != v]
@@ -71,5 +94,5 @@ def is_claw_free(G):
             adj_b = adj[b]
             for c in nbrs:
                 if c != a and c != b and c not in adj_a and c not in adj_b:
-                    return False
-    return True
+                    return v, (a, b, c)
+    return None

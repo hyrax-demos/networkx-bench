@@ -80,3 +80,67 @@ def test_not_implemented(graph_type):
     G = graph_type([(0, 1)])
     with pytest.raises(nx.NetworkXNotImplemented):
         nx.is_split_graph(G)
+
+
+def _assert_valid_split_partition(G, partition):
+    clique, independent_set = partition
+    assert isinstance(clique, set)
+    assert isinstance(independent_set, set)
+    assert clique.isdisjoint(independent_set)
+    assert clique | independent_set == set(G)
+    for u, v in itertools.combinations(clique, 2):
+        assert G.has_edge(u, v)
+    for u, v in itertools.combinations(independent_set, 2):
+        assert not G.has_edge(u, v)
+
+
+@pytest.mark.parametrize("n", range(7))
+def test_certificate_small_graphs(n):
+    for G in nx.graph_atlas_g():
+        if len(G) != n:
+            continue
+        result, partition = nx.is_split_graph(G, certificate=True)
+        assert result == nx.is_split_graph(G)
+        if result:
+            _assert_valid_split_partition(G, partition)
+        else:
+            assert partition is None
+
+
+@pytest.mark.parametrize("seed", range(10))
+def test_certificate_random(seed):
+    G = nx.gnp_random_graph(8, 0.5, seed=seed)
+    result, partition = nx.is_split_graph(G, certificate=True)
+    assert result == _brute_force_is_split(G)
+    if result:
+        _assert_valid_split_partition(G, partition)
+    else:
+        assert partition is None
+
+
+def test_certificate_clique_with_pendants():
+    G = nx.complete_graph(4)
+    G.add_edges_from([(0, "a"), (1, "b"), (2, "b"), (3, "c")])
+    result, partition = nx.is_split_graph(G, certificate=True)
+    assert result
+    _assert_valid_split_partition(G, partition)
+
+
+def test_certificate_null_graph():
+    assert nx.is_split_graph(nx.null_graph(), certificate=True) == (
+        True,
+        (set(), set()),
+    )
+
+
+def test_certificate_non_split():
+    assert nx.is_split_graph(nx.cycle_graph(4), certificate=True) == (False, None)
+    assert nx.is_split_graph(nx.Graph([(0, 1), (2, 3)]), certificate=True) == (
+        False,
+        None,
+    )
+
+
+def test_certificate_default_returns_bool():
+    assert nx.is_split_graph(nx.star_graph(3)) is True
+    assert nx.is_split_graph(nx.cycle_graph(4)) is False
