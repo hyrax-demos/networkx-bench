@@ -1,5 +1,6 @@
 from .betweenness import *
 from .betweenness_subset import *
+from .centralization import *
 from .closeness import *
 from .current_flow_betweenness import *
 from .current_flow_betweenness_subset import *
