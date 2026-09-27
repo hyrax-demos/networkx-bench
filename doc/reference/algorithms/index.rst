@@ -39,6 +39,7 @@ Algorithms
    efficiency_measures
    euler
    flow
+   graph_classes
    graph_hashing
    graphical
    hierarchy
