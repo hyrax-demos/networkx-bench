@@ -426,6 +426,15 @@ class TestRelabelNodesByAttribute:
         assert nodes_equal(G.nodes, [0, 1, 2])
         assert edges_equal(G.edges, [(0, 1), (1, 2)])
 
+    @pytest.mark.parametrize("copy", [True, False])
+    def test_none_attribute_value_raises(self, copy):
+        G = nx.path_graph(3)
+        nx.set_node_attributes(G, {0: "a", 1: "b", 2: None}, "name")
+        with pytest.raises(nx.NetworkXError, match="None"):
+            nx.relabel_nodes_by_attribute(G, "name", copy=copy)
+        assert nodes_equal(G.nodes, [0, 1, 2])
+        assert edges_equal(G.edges, [(0, 1), (1, 2)])
+
     def test_attribute_equal_to_own_label(self):
         G = nx.path_graph(3)
         nx.set_node_attributes(G, {0: 0, 1: "b", 2: 2}, "name")

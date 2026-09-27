@@ -165,8 +165,9 @@ def relabel_nodes_by_attribute(G, attr, *, copy=True, default=None):
     Raises
     ------
     NetworkXError
-       If a node lacks `attr` and `default` is None, or if two distinct
-       nodes would be mapped to the same new label.
+       If a node lacks `attr` and `default` is None, if a node's `attr`
+       value is None, or if two distinct nodes would be mapped to the
+       same new label.
 
     Examples
     --------
@@ -207,6 +208,11 @@ def relabel_nodes_by_attribute(G, attr, *, copy=True, default=None):
         else:
             raise nx.NetworkXError(
                 f"Node {n!r} has no attribute {attr!r} and no default was given."
+            )
+        if new is None:
+            raise nx.NetworkXError(
+                f"Node {n!r} has attribute {attr!r} set to None, "
+                "which is not a valid node label."
             )
         if new in owner:
             raise nx.NetworkXError(
