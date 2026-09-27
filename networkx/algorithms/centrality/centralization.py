@@ -2,7 +2,8 @@
 
 A centralization index summarizes a node-level centrality measure into a
 single graph-level score describing how strongly the graph is organized
-around its most central node.
+around its most central node. Every index in this module is normalized by
+the star graph on the same number of nodes, the theoretical maximum.
 """
 
 import math
