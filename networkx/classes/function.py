@@ -1,6 +1,7 @@
 """Functional interface to graph methods and assorted utilities."""
 
 from collections import Counter
+from dataclasses import dataclass, fields
 from itertools import chain
 
 import networkx as nx
@@ -47,6 +48,10 @@ __all__ = [
     "path_weight",
     "is_path",
     "describe",
+    "graph_summary",
+    "GraphSummary",
+    "leaf_nodes",
+    "number_of_leaves",
 ]
 
 
@@ -1440,6 +1445,69 @@ def number_of_selfloops(G):
     return sum(1 for _ in nx.selfloop_edges(G))
 
 
+def leaf_nodes(G):
+    """Returns an iterator over the leaf nodes of `G`.
+
+    A leaf node is a node of degree exactly one. For directed graphs the
+    total degree (in-degree plus out-degree) is used. As with
+    :func:`degree`, a self-loop contributes two to the degree of its node,
+    so a node whose only edge is a self-loop is not a leaf.
+
+    Parameters
+    ----------
+    G : graph
+        A NetworkX graph.
+
+    Returns
+    -------
+    iterator
+        An iterator over the nodes of `G` with degree one.
+
+    See Also
+    --------
+    number_of_leaves, degree
+
+    Examples
+    --------
+    >>> G = nx.star_graph(3)
+    >>> sorted(nx.leaf_nodes(G))
+    [1, 2, 3]
+    >>> G = nx.DiGraph([(0, 1), (1, 2)])
+    >>> sorted(nx.leaf_nodes(G))
+    [0, 2]
+    """
+    return (n for n, d in G.degree if d == 1)
+
+
+def number_of_leaves(G):
+    """Returns the number of leaf nodes in `G`.
+
+    A leaf node is a node of degree exactly one (total in- plus out-degree
+    for directed graphs; a self-loop counts two toward the degree).
+
+    Parameters
+    ----------
+    G : graph
+        A NetworkX graph.
+
+    Returns
+    -------
+    int
+        The number of nodes of `G` with degree one.
+
+    See Also
+    --------
+    leaf_nodes
+
+    Examples
+    --------
+    >>> G = nx.path_graph(4)
+    >>> nx.number_of_leaves(G)
+    2
+    """
+    return sum(1 for _ in leaf_nodes(G))
+
+
 def is_path(G, path):
     """Returns whether or not the specified path exists.
 
@@ -1570,9 +1638,212 @@ def describe(G, describe_hook=None):
         additional_info = describe_hook(G)
         info_dict.update(additional_info)
 
-    max_key_len = max(len(k) for k in info_dict)
-    for key, val in info_dict.items():
-        print(f"{key:<{max_key_len}} : {val}")
+    print(_format_two_column(info_dict))
+
+
+def _format_two_column(info):
+    """Render a mapping as an aligned ``key : value`` table, one row per line."""
+    if not info:
+        return ""
+    width = max(len(str(k)) for k in info)
+    return "\n".join(f"{key!s:<{width}} : {val}" for key, val in info.items())
+
+
+# Resolved lazily (at call time) because ``networkx`` is only partially
+# initialized when this module is imported.
+_GRAPH_SUMMARY_FUNCS = {
+    "number_of_nodes": lambda G: nx.number_of_nodes(G),
+    "number_of_edges": lambda G: nx.number_of_edges(G),
+    "density": lambda G: nx.density(G),
+    "is_directed": lambda G: nx.is_directed(G),
+    "is_multigraph": lambda G: G.is_multigraph(),
+    "number_of_selfloops": lambda G: nx.number_of_selfloops(G),
+    "number_of_isolates": lambda G: nx.number_of_isolates(G),
+    "number_of_connected_components": lambda G: _summary_number_of_components(G),
+    "average_degree": lambda G: _summary_average_degree(G),
+    "max_degree": lambda G: _summary_max_degree(G),
+}
+
+
+def _summary_number_of_components(G):
+    # Weak connectivity for directed graphs; 0 for the empty graph.
+    if G.is_directed():
+        return nx.number_weakly_connected_components(G)
+    return nx.number_connected_components(G)
+
+
+def _summary_average_degree(G):
+    # Mean (total, for directed graphs) degree; 0.0 for the empty graph.
+    n = len(G)
+    if n == 0:
+        return 0.0
+    return sum(d for _, d in G.degree()) / n
+
+
+def _summary_max_degree(G):
+    # Largest (total, for directed graphs) degree; 0 for the empty graph.
+    return max((d for _, d in G.degree()), default=0)
+
+
+@dataclass
+class GraphSummary:
+    """Basic structural properties of a graph, as returned by :func:`graph_summary`.
+
+    Each attribute corresponds to one key of :func:`graph_summary`. When the
+    summary was computed with a restricted ``include``, the attributes that
+    were not requested are ``None`` and are omitted from :meth:`to_dict` and
+    from the text rendering.
+
+    Examples
+    --------
+    >>> summary = nx.graph_summary(nx.path_graph(4), format="object")
+    >>> summary.number_of_nodes, summary.max_degree
+    (4, 2)
+    >>> summary.to_dict() == nx.graph_summary(nx.path_graph(4))
+    True
+    """
+
+    number_of_nodes: int | None = None
+    number_of_edges: int | None = None
+    density: float | None = None
+    is_directed: bool | None = None
+    is_multigraph: bool | None = None
+    number_of_selfloops: int | None = None
+    number_of_isolates: int | None = None
+    number_of_connected_components: int | None = None
+    average_degree: float | None = None
+    max_degree: int | None = None
+
+    def to_dict(self):
+        """Return the computed fields as a dict, in canonical key order.
+
+        Fields that were not computed (``None``) are omitted.
+        """
+        return {
+            f.name: getattr(self, f.name)
+            for f in fields(self)
+            if getattr(self, f.name) is not None
+        }
+
+    def __str__(self):
+        """Render the computed fields as an aligned two-column table."""
+        return _format_two_column(self.to_dict())
+
+
+_GRAPH_SUMMARY_FORMATS = ("dict", "object", "text")
+
+
+def graph_summary(G, include=None, *, format="dict"):
+    """Returns basic structural properties of `G`.
+
+    Parameters
+    ----------
+    G : graph
+        A NetworkX graph.
+
+    include : iterable of str, optional (default=None)
+        The names of the keys to compute. If None, all keys are computed.
+        Otherwise only the named keys are computed and returned.
+
+    format : {"dict", "object", "text"}, optional (default="dict")
+        The form of the result:
+
+        - ``"dict"``: a dictionary mapping key names to values.
+        - ``"object"``: a :class:`GraphSummary` instance.
+        - ``"text"``: a string with one aligned ``key : value`` row per
+          computed key (the same as ``str()`` of the :class:`GraphSummary`).
+
+    Returns
+    -------
+    dict, GraphSummary or str
+        Depending on `format`. The summary holds (a subset of) the following
+        keys:
+
+        - ``"number_of_nodes"``: the number of nodes in `G`.
+        - ``"number_of_edges"``: the number of edges in `G`.
+        - ``"density"``: the density of `G` (see :func:`density`).
+        - ``"is_directed"``: whether `G` is directed.
+        - ``"is_multigraph"``: whether `G` is a multigraph.
+        - ``"number_of_selfloops"``: the number of selfloop edges in `G`.
+        - ``"number_of_isolates"``: the number of isolated nodes in `G`.
+        - ``"number_of_connected_components"``: the number of connected
+          components of `G` (weakly connected components if `G` is
+          directed). This is 0 for the empty graph.
+        - ``"average_degree"``: the mean node degree of `G` as a float
+          (total in- plus out-degree for directed graphs). This is 0.0 for
+          the empty graph.
+        - ``"max_degree"``: the largest node degree of `G` (total in- plus
+          out-degree for directed graphs). This is 0 for the empty graph.
+
+        Keys appear in the order listed above.
+
+    Raises
+    ------
+    ValueError
+        If `include` contains a key name not listed above, or if `format`
+        is not one of ``"dict"``, ``"object"`` or ``"text"``.
+
+    See Also
+    --------
+    GraphSummary, describe, density, number_of_selfloops, number_of_isolates,
+    number_connected_components, number_weakly_connected_components
+
+    Examples
+    --------
+    >>> G = nx.path_graph(4)
+    >>> summary = nx.graph_summary(G)
+    >>> summary["number_of_nodes"], summary["number_of_edges"]
+    (4, 3)
+    >>> summary["density"]
+    0.5
+    >>> summary["number_of_isolates"]
+    0
+    >>> summary["number_of_connected_components"]
+    1
+    >>> summary["average_degree"], summary["max_degree"]
+    (1.5, 2)
+    >>> nx.graph_summary(G, include=["number_of_nodes", "is_directed"])
+    {'number_of_nodes': 4, 'is_directed': False}
+
+    The same information as a :class:`GraphSummary` object or as text:
+
+    >>> nx.graph_summary(G, format="object").average_degree
+    1.5
+    >>> print(nx.graph_summary(G, format="text"))
+    number_of_nodes                : 4
+    number_of_edges                : 3
+    density                        : 0.5
+    is_directed                    : False
+    is_multigraph                  : False
+    number_of_selfloops            : 0
+    number_of_isolates             : 0
+    number_of_connected_components : 1
+    average_degree                 : 1.5
+    max_degree                     : 2
+    """
+    if format not in _GRAPH_SUMMARY_FORMATS:
+        raise ValueError(
+            f"Unknown graph_summary format: {format!r}. "
+            f"Valid formats are: {list(_GRAPH_SUMMARY_FORMATS)}"
+        )
+    if include is None:
+        keys = _GRAPH_SUMMARY_FUNCS.keys()
+    else:
+        requested = set(include)
+        unknown = requested - _GRAPH_SUMMARY_FUNCS.keys()
+        if unknown:
+            raise ValueError(
+                f"Unknown graph_summary key(s): {sorted(map(str, unknown))}. "
+                f"Valid keys are: {list(_GRAPH_SUMMARY_FUNCS)}"
+            )
+        keys = [k for k in _GRAPH_SUMMARY_FUNCS if k in requested]
+    result = {key: _GRAPH_SUMMARY_FUNCS[key](G) for key in keys}
+    if format == "dict":
+        return result
+    summary = GraphSummary(**result)
+    if format == "object":
+        return summary
+    return str(summary)
 
 
 def _create_describe_info_dict(G):

@@ -24,6 +24,9 @@ Graph
    induced_subgraph
    restricted_view
    edge_subgraph
+   graph_summary
+   GraphSummary
+   describe
 
 
 Nodes
@@ -37,6 +40,8 @@ Nodes
    all_neighbors
    non_neighbors
    common_neighbors
+   leaf_nodes
+   number_of_leaves
 
 
 Edges
