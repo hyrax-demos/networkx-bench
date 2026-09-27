@@ -25,6 +25,8 @@ Graph
    restricted_view
    edge_subgraph
    graph_summary
+   GraphSummary
+   describe
 
 
 Nodes

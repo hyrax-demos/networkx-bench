@@ -1205,3 +1205,99 @@ def test_leaf_nodes_returns_iterator():
     leaves = nx.leaf_nodes(G)
     assert iter(leaves) is leaves
     assert nx.number_of_leaves(nx.Graph()) == 0
+
+
+_PATH4_SUMMARY = {
+    "number_of_nodes": 4,
+    "number_of_edges": 3,
+    "density": 0.5,
+    "is_directed": False,
+    "is_multigraph": False,
+    "number_of_selfloops": 0,
+    "number_of_isolates": 0,
+    "number_of_connected_components": 1,
+    "average_degree": 1.5,
+    "max_degree": 2,
+}
+
+
+def test_graph_summary_format_dict_is_default():
+    G = nx.path_graph(4)
+    assert nx.graph_summary(G, format="dict") == nx.graph_summary(G)
+    assert nx.graph_summary(G) == _PATH4_SUMMARY
+
+
+def test_graph_summary_format_object():
+    G = nx.path_graph(4)
+    summary = nx.graph_summary(G, format="object")
+    assert isinstance(summary, nx.GraphSummary)
+    assert summary.number_of_nodes == 4
+    assert summary.max_degree == 2
+    assert summary.to_dict() == _PATH4_SUMMARY
+    assert list(summary.to_dict()) == list(_PATH4_SUMMARY)
+
+
+def test_graph_summary_format_text():
+    G = nx.path_graph(4)
+    text = nx.graph_summary(G, format="text")
+    assert text == str(nx.graph_summary(G, format="object"))
+    lines = text.splitlines()
+    assert len(lines) == len(_PATH4_SUMMARY)
+    width = max(len(k) for k in _PATH4_SUMMARY)
+    for line, (key, val) in zip(lines, _PATH4_SUMMARY.items()):
+        assert line == f"{key:<{width}} : {val}"
+    # Columns are aligned: every separator sits at the same offset.
+    assert len({line.index(" : ") for line in lines}) == 1
+
+
+def test_graph_summary_format_include_subset():
+    G = nx.path_graph(4)
+    include = ["max_degree", "number_of_nodes"]
+    summary = nx.graph_summary(G, include=include, format="object")
+    assert summary.to_dict() == {"number_of_nodes": 4, "max_degree": 2}
+    assert summary.density is None
+    text = nx.graph_summary(G, include=include, format="text")
+    assert text == "number_of_nodes : 4\nmax_degree      : 2"
+    assert nx.graph_summary(G, include=[], format="text") == ""
+
+
+def test_graph_summary_format_empty_graph():
+    G = nx.Graph()
+    expected = nx.graph_summary(G)
+    summary = nx.graph_summary(G, format="object")
+    assert summary.to_dict() == expected
+    assert summary.number_of_nodes == 0
+    assert summary.average_degree == 0.0
+    text = nx.graph_summary(G, format="text")
+    assert len(text.splitlines()) == len(expected)
+    assert "number_of_connected_components : 0" in text
+
+
+def test_graph_summary_format_multigraph():
+    G = nx.MultiGraph([(0, 1), (0, 1), (1, 2), (2, 2)])
+    expected = {
+        "number_of_nodes": 3,
+        "number_of_edges": 4,
+        "density": nx.density(G),
+        "is_directed": False,
+        "is_multigraph": True,
+        "number_of_selfloops": 1,
+        "number_of_isolates": 0,
+        "number_of_connected_components": 1,
+        "average_degree": pytest.approx(8 / 3),
+        # Degrees: 0 -> 2, 1 -> 3, 2 -> 1 + 2 (self-loop counts twice) = 3.
+        "max_degree": 3,
+    }
+    assert nx.graph_summary(G) == expected
+    summary = nx.graph_summary(G, format="object")
+    assert summary.is_multigraph is True
+    assert summary.number_of_edges == 4
+    assert summary.to_dict() == expected
+    text = nx.graph_summary(G, format="text")
+    assert "is_multigraph                  : True" in text
+    assert "number_of_selfloops            : 1" in text
+
+
+def test_graph_summary_format_invalid():
+    with pytest.raises(ValueError, match="bogus"):
+        nx.graph_summary(nx.path_graph(3), format="bogus")

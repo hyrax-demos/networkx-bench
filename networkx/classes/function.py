@@ -1,6 +1,7 @@
 """Functional interface to graph methods and assorted utilities."""
 
 from collections import Counter
+from dataclasses import dataclass, fields
 from itertools import chain
 
 import networkx as nx
@@ -48,6 +49,7 @@ __all__ = [
     "is_path",
     "describe",
     "graph_summary",
+    "GraphSummary",
     "leaf_nodes",
     "number_of_leaves",
 ]
@@ -1636,9 +1638,15 @@ def describe(G, describe_hook=None):
         additional_info = describe_hook(G)
         info_dict.update(additional_info)
 
-    max_key_len = max(len(k) for k in info_dict)
-    for key, val in info_dict.items():
-        print(f"{key:<{max_key_len}} : {val}")
+    print(_format_two_column(info_dict))
+
+
+def _format_two_column(info):
+    """Render a mapping as an aligned ``key : value`` table, one row per line."""
+    if not info:
+        return ""
+    width = max(len(str(k)) for k in info)
+    return "\n".join(f"{key!s:<{width}} : {val}" for key, val in info.items())
 
 
 # Resolved lazily (at call time) because ``networkx`` is only partially
@@ -1677,8 +1685,56 @@ def _summary_max_degree(G):
     return max((d for _, d in G.degree()), default=0)
 
 
-def graph_summary(G, include=None):
-    """Returns a dictionary of basic structural properties of `G`.
+@dataclass
+class GraphSummary:
+    """Basic structural properties of a graph, as returned by :func:`graph_summary`.
+
+    Each attribute corresponds to one key of :func:`graph_summary`. When the
+    summary was computed with a restricted ``include``, the attributes that
+    were not requested are ``None`` and are omitted from :meth:`to_dict` and
+    from the text rendering.
+
+    Examples
+    --------
+    >>> summary = nx.graph_summary(nx.path_graph(4), format="object")
+    >>> summary.number_of_nodes, summary.max_degree
+    (4, 2)
+    >>> summary.to_dict() == nx.graph_summary(nx.path_graph(4))
+    True
+    """
+
+    number_of_nodes: int | None = None
+    number_of_edges: int | None = None
+    density: float | None = None
+    is_directed: bool | None = None
+    is_multigraph: bool | None = None
+    number_of_selfloops: int | None = None
+    number_of_isolates: int | None = None
+    number_of_connected_components: int | None = None
+    average_degree: float | None = None
+    max_degree: int | None = None
+
+    def to_dict(self):
+        """Return the computed fields as a dict, in canonical key order.
+
+        Fields that were not computed (``None``) are omitted.
+        """
+        return {
+            f.name: getattr(self, f.name)
+            for f in fields(self)
+            if getattr(self, f.name) is not None
+        }
+
+    def __str__(self):
+        """Render the computed fields as an aligned two-column table."""
+        return _format_two_column(self.to_dict())
+
+
+_GRAPH_SUMMARY_FORMATS = ("dict", "object", "text")
+
+
+def graph_summary(G, include=None, *, format="dict"):
+    """Returns basic structural properties of `G`.
 
     Parameters
     ----------
@@ -1689,10 +1745,19 @@ def graph_summary(G, include=None):
         The names of the keys to compute. If None, all keys are computed.
         Otherwise only the named keys are computed and returned.
 
+    format : {"dict", "object", "text"}, optional (default="dict")
+        The form of the result:
+
+        - ``"dict"``: a dictionary mapping key names to values.
+        - ``"object"``: a :class:`GraphSummary` instance.
+        - ``"text"``: a string with one aligned ``key : value`` row per
+          computed key (the same as ``str()`` of the :class:`GraphSummary`).
+
     Returns
     -------
-    dict
-        A dictionary with (a subset of) the following keys:
+    dict, GraphSummary or str
+        Depending on `format`. The summary holds (a subset of) the following
+        keys:
 
         - ``"number_of_nodes"``: the number of nodes in `G`.
         - ``"number_of_edges"``: the number of edges in `G`.
@@ -1715,11 +1780,12 @@ def graph_summary(G, include=None):
     Raises
     ------
     ValueError
-        If `include` contains a key name not listed above.
+        If `include` contains a key name not listed above, or if `format`
+        is not one of ``"dict"``, ``"object"`` or ``"text"``.
 
     See Also
     --------
-    describe, density, number_of_selfloops, number_of_isolates,
+    GraphSummary, describe, density, number_of_selfloops, number_of_isolates,
     number_connected_components, number_weakly_connected_components
 
     Examples
@@ -1738,7 +1804,28 @@ def graph_summary(G, include=None):
     (1.5, 2)
     >>> nx.graph_summary(G, include=["number_of_nodes", "is_directed"])
     {'number_of_nodes': 4, 'is_directed': False}
+
+    The same information as a :class:`GraphSummary` object or as text:
+
+    >>> nx.graph_summary(G, format="object").average_degree
+    1.5
+    >>> print(nx.graph_summary(G, format="text"))
+    number_of_nodes                : 4
+    number_of_edges                : 3
+    density                        : 0.5
+    is_directed                    : False
+    is_multigraph                  : False
+    number_of_selfloops            : 0
+    number_of_isolates             : 0
+    number_of_connected_components : 1
+    average_degree                 : 1.5
+    max_degree                     : 2
     """
+    if format not in _GRAPH_SUMMARY_FORMATS:
+        raise ValueError(
+            f"Unknown graph_summary format: {format!r}. "
+            f"Valid formats are: {list(_GRAPH_SUMMARY_FORMATS)}"
+        )
     if include is None:
         keys = _GRAPH_SUMMARY_FUNCS.keys()
     else:
@@ -1750,7 +1837,13 @@ def graph_summary(G, include=None):
                 f"Valid keys are: {list(_GRAPH_SUMMARY_FUNCS)}"
             )
         keys = [k for k in _GRAPH_SUMMARY_FUNCS if k in requested]
-    return {key: _GRAPH_SUMMARY_FUNCS[key](G) for key in keys}
+    result = {key: _GRAPH_SUMMARY_FUNCS[key](G) for key in keys}
+    if format == "dict":
+        return result
+    summary = GraphSummary(**result)
+    if format == "object":
+        return summary
+    return str(summary)
 
 
 def _create_describe_info_dict(G):
