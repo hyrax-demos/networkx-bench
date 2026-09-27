@@ -75,7 +75,14 @@ becomes a useful notion.
 
 import networkx as nx
 
-__all__ = ["is_arborescence", "is_branching", "is_forest", "is_tree"]
+__all__ = [
+    "is_arborescence",
+    "is_branching",
+    "is_caterpillar",
+    "is_forest",
+    "is_lobster",
+    "is_tree",
+]
 
 
 @nx.utils.not_implemented_for("undirected")
@@ -271,3 +278,150 @@ def is_tree(G):
 
     # A connected graph with no cycles has n-1 edges.
     return len(G) - 1 == G.number_of_edges() and is_connected(G)
+
+
+def _is_caterpillar_tree(T):
+    """Returns True if the tree `T` is a caterpillar.
+
+    `T` must already be known to be an undirected tree, or be empty. The
+    graph is not modified. An empty `T` is considered a caterpillar so that
+    callers can pass the (possibly empty) remainder of a leaf-stripped tree.
+    """
+    spine = {n for n, d in T.degree() if d > 1}
+    # The remainder of a tree after removing its leaves is again a tree, so
+    # it is a path (or empty) exactly when every node has degree <= 2 in it.
+    return all(sum(1 for nbr in T[n] if nbr in spine) <= 2 for n in spine)
+
+
+@nx.utils.not_implemented_for("directed")
+@nx._dispatchable
+def is_caterpillar(G):
+    """
+    Returns True if `G` is a caterpillar.
+
+    A caterpillar is a tree in which removing all leaves (degree-1 nodes)
+    leaves a path or nothing at all.
+
+    Parameters
+    ----------
+    G : undirected graph
+        The graph to test.
+
+    Returns
+    -------
+    b : bool
+        A boolean that is True if `G` is a caterpillar.
+
+    Raises
+    ------
+    NetworkXNotImplemented
+        If `G` is directed.
+
+    NetworkXPointlessConcept
+        If `G` is empty.
+
+    See Also
+    --------
+    is_tree
+    is_lobster
+
+    Notes
+    -----
+    A single node and a single edge are caterpillars, as are all paths and
+    stars. Graphs that are not trees, including multigraphs with parallel
+    edges, are not caterpillars.
+
+    Examples
+    --------
+    >>> nx.is_caterpillar(nx.path_graph(5))
+    True
+    >>> nx.is_caterpillar(nx.star_graph(4))
+    True
+
+    A spider with three legs of length 2 is not a caterpillar, because
+    removing its leaves leaves a star with three leaves:
+
+    >>> G = nx.Graph([(0, 1), (1, 2), (0, 3), (3, 4), (0, 5), (5, 6)])
+    >>> nx.is_caterpillar(G)
+    False
+    >>> nx.is_caterpillar(nx.cycle_graph(4))  # not a tree
+    False
+
+    """
+    if len(G) == 0:
+        raise nx.NetworkXPointlessConcept("G has no nodes.")
+
+    return nx.is_tree(G) and _is_caterpillar_tree(G)
+
+
+@nx.utils.not_implemented_for("directed")
+@nx._dispatchable
+def is_lobster(G):
+    """
+    Returns True if `G` is a lobster.
+
+    A lobster is a tree in which removing all leaves (degree-1 nodes)
+    leaves a caterpillar or nothing at all.
+
+    Parameters
+    ----------
+    G : undirected graph
+        The graph to test.
+
+    Returns
+    -------
+    b : bool
+        A boolean that is True if `G` is a lobster.
+
+    Raises
+    ------
+    NetworkXNotImplemented
+        If `G` is directed.
+
+    NetworkXPointlessConcept
+        If `G` is empty.
+
+    See Also
+    --------
+    is_tree
+    is_caterpillar
+
+    Notes
+    -----
+    Every caterpillar is a lobster. Graphs that are not trees, including
+    multigraphs with parallel edges, are not lobsters.
+
+    Examples
+    --------
+    A spider with three legs of length 2 is a lobster (but not a
+    caterpillar), because removing its leaves leaves a star:
+
+    >>> G = nx.Graph([(0, 1), (1, 2), (0, 3), (3, 4), (0, 5), (5, 6)])
+    >>> nx.is_lobster(G)
+    True
+
+    A spider with three legs of length 3 is not a lobster:
+
+    >>> G = nx.Graph()
+    >>> nx.add_path(G, [0, 1, 2, 3])
+    >>> nx.add_path(G, [0, 4, 5, 6])
+    >>> nx.add_path(G, [0, 7, 8, 9])
+    >>> nx.is_lobster(G)
+    False
+
+    """
+    if len(G) == 0:
+        raise nx.NetworkXPointlessConcept("G has no nodes.")
+
+    if not nx.is_tree(G):
+        return False
+
+    # Removing the leaves of a tree leaves a (possibly empty) tree; use a
+    # read-only subgraph view so that `G` is not modified.
+    remainder = G.subgraph([n for n, d in G.degree() if d > 1])
+    # By definition, G is a lobster exactly when its leaf-stripped remainder
+    # is a caterpillar, so reuse the caterpillar check on the remainder rather
+    # than stripping leaves a second time and re-implementing the path test.
+    # The undecorated helper is used (not the public is_caterpillar) because
+    # the remainder may be empty, which is_caterpillar would reject.
+    return len(remainder) == 0 or _is_caterpillar_tree(remainder)

@@ -16,6 +16,8 @@ Recognition
    is_forest
    is_arborescence
    is_branching
+   is_caterpillar
+   is_lobster
 
 Branchings and Spanning Arborescences
 -------------------------------------
