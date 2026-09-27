@@ -135,42 +135,47 @@ class TestGeneratorsRandom:
         constructor = [(10, 20, 0.8), (20, 40, 0.8)]
         G = nx.random_shell_graph(constructor, seed)
 
-        def is_caterpillar(g):
-            """
-            A tree is a caterpillar iff all nodes of degree >=3 are surrounded
-            by at most two nodes of degree two or greater.
-            ref: http://mathworld.wolfram.com/CaterpillarGraph.html
-            """
-            deg_over_3 = [n for n in g if g.degree(n) >= 3]
-            for n in deg_over_3:
-                nbh_deg_over_2 = [nbh for nbh in g.neighbors(n) if g.degree(nbh) >= 2]
-                if not len(nbh_deg_over_2) <= 2:
-                    return False
-            return True
+        # difficult to find seed that requires few tries
+        seq = nx.random_powerlaw_tree_sequence(10, 3, seed=14, tries=1)
+        G = nx.random_powerlaw_tree(10, 3, seed=14, tries=1)
 
-        def is_lobster(g):
-            """
-            A tree is a lobster if it has the property that the removal of leaf
-            nodes leaves a caterpillar graph (Gallian 2007)
-            ref: http://mathworld.wolfram.com/LobsterGraph.html
-            """
-            non_leafs = [n for n in g if g.degree(n) > 1]
-            return is_caterpillar(g.subgraph(non_leafs))
-
+    def test_random_lobster_graph(self):
+        seed = 42
         G = nx.random_lobster_graph(10, 0.1, 0.5, seed)
-        assert max(G.degree(n) for n in G.nodes()) > 3
-        assert is_lobster(G)
+        assert nx.is_lobster(G)
+        # with p2 > 0 this seed grows second-level branches off the backbone
+        assert not nx.is_caterpillar(G)
         pytest.raises(nx.NetworkXError, nx.random_lobster_graph, 10, 0.1, 1, seed)
         pytest.raises(nx.NetworkXError, nx.random_lobster_graph, 10, 1, 1, seed)
         pytest.raises(nx.NetworkXError, nx.random_lobster_graph, 10, 1, 0.5, seed)
 
         # docstring says this should be a caterpillar
         G = nx.random_lobster_graph(10, 0.1, 0.0, seed)
-        assert is_caterpillar(G)
+        assert nx.is_caterpillar(G)
 
-        # difficult to find seed that requires few tries
-        seq = nx.random_powerlaw_tree_sequence(10, 3, seed=14, tries=1)
-        G = nx.random_powerlaw_tree(10, 3, seed=14, tries=1)
+    @pytest.mark.parametrize(("p1", "p2"), [(0.1, 0.5), (0.5, 0.5), (0.9, 0.9)])
+    def test_random_lobster_graph_is_lobster(self, p1, p2):
+        for seed in range(20):
+            G = nx.random_lobster_graph(10, p1, p2, seed)
+            # The backbone length is random and may be 0 (the null graph).
+            if len(G) > 0:
+                assert nx.is_lobster(G)
+
+    @pytest.mark.parametrize("p1", [0.0, 0.1, 0.5, 0.9])
+    def test_random_lobster_graph_p2_zero_is_caterpillar(self, p1):
+        for seed in range(20):
+            G = nx.random_lobster_graph(10, p1, 0.0, seed)
+            if len(G) > 0:
+                assert nx.is_caterpillar(G)
+                assert nx.is_lobster(G)
+
+    def test_random_lobster_graph_p1_zero_is_path(self):
+        for seed in range(20):
+            G = nx.random_lobster_graph(10, 0.0, 0.0, seed)
+            if len(G) > 0:
+                # with no branches, the output is just the backbone path
+                assert nx.is_isomorphic(G, nx.path_graph(len(G)))
+                assert nx.is_caterpillar(G)
 
     def test_dual_barabasi_albert(self, m1=1, m2=4, p=0.5):
         """
