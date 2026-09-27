@@ -997,3 +997,98 @@ class TestEccentricityDistribution:
         G = nx.DiGraph([(0, 1), (1, 2)])
         with pytest.raises(nx.NetworkXError, match="not strongly connected"):
             nx.eccentricity_distribution(G)
+
+
+class TestPrecomputedEccentricity:
+    """Each eccentricity-based helper accepts a shared precomputed ``e``."""
+
+    def setup_method(self):
+        self.G = nx.Graph([(1, 2), (1, 3), (1, 4), (3, 4), (3, 5), (4, 5)])
+        self.e = nx.eccentricity(self.G)
+
+    @pytest.mark.parametrize(
+        "func",
+        [
+            nx.diameter,
+            nx.radius,
+            nx.periphery,
+            nx.center,
+            nx.diameter_path,
+            nx.eccentricity_distribution,
+        ],
+    )
+    def test_precomputed_matches_computed(self, func):
+        assert func(self.G, e=self.e) == func(self.G)
+
+    def test_precomputed_values(self):
+        G, e = self.G, self.e
+        assert nx.diameter(G, e=e) == 3
+        assert nx.radius(G, e=e) == 2
+        assert nx.periphery(G, e=e) == [2, 5]
+        assert nx.center(G, e=e) == [1, 3, 4]
+        assert nx.diameter_path(G, e=e) == [2, 1, 3, 5]
+        assert nx.eccentricity_distribution(G, e=e) == {2: 3, 3: 2}
+
+    def test_precomputed_is_used(self):
+        # A supplied e is trusted rather than recomputed.
+        G = nx.path_graph(4)
+        e = {0: 1, 1: 1, 2: 1, 3: 1}
+        assert nx.diameter(G, e=e) == 1
+        assert nx.radius(G, e=e) == 1
+        assert nx.periphery(G, e=e) == [0, 1, 2, 3]
+        assert nx.center(G, e=e) == [0, 1, 2, 3]
+        assert nx.eccentricity_distribution(G, e=e) == {1: 4}
+
+    def test_precomputed_weighted(self):
+        G = nx.Graph()
+        G.add_weighted_edges_from([(0, 1, 1), (1, 2, 1), (0, 2, 5), (2, 3, 10)])
+        e = nx.eccentricity(G, weight="weight")
+        path = nx.diameter_path(G, weight="weight", e=e)
+        assert path == nx.diameter_path(G, weight="weight") == [0, 1, 2, 3]
+        assert nx.eccentricity_distribution(
+            G, weight="weight", e=e
+        ) == nx.eccentricity_distribution(G, weight="weight")
+
+    def test_precomputed_directed(self):
+        G = nx.DiGraph([(0, 1), (1, 2), (2, 0)])
+        e = nx.eccentricity(G)
+        assert nx.diameter_path(G, e=e) == [0, 1, 2]
+        assert nx.eccentricity_distribution(G, e=e) == {2: 3}
+
+    def test_precomputed_with_usebounds(self):
+        G, e = self.G, self.e
+        assert nx.diameter(G, e=e, usebounds=True) == 3
+        assert nx.radius(G, e=e, usebounds=True) == 2
+        assert nx.diameter_path(G, e=e, usebounds=True) == [2, 1, 3, 5]
+
+    def test_extra_keys_ignored_by_distribution(self):
+        e = dict(self.e)
+        e["not a node"] = 99
+        assert nx.eccentricity_distribution(self.G, e=e) == {2: 3, 3: 2}
+
+    @pytest.mark.parametrize(
+        "func",
+        [
+            nx.diameter,
+            nx.radius,
+            nx.periphery,
+            nx.center,
+            nx.diameter_path,
+            nx.eccentricity_distribution,
+        ],
+    )
+    def test_incomplete_e_raises(self, func):
+        e = dict(self.e)
+        del e[5]
+        with pytest.raises(nx.NetworkXError, match="missing"):
+            func(self.G, e=e)
+
+    @pytest.mark.parametrize("func", [nx.diameter_path, nx.eccentricity_distribution])
+    def test_empty_e_null_graph(self, func):
+        with pytest.raises(nx.NetworkXPointlessConcept):
+            func(nx.Graph(), e={})
+
+    def test_diameter_path_disconnected_with_e(self):
+        G = nx.Graph([(0, 1), (2, 3)])
+        with pytest.raises(nx.NetworkXError, match="not connected"):
+            nx.diameter_path(G, e={0: 1, 1: 1, 2: 1, 3: 1})
