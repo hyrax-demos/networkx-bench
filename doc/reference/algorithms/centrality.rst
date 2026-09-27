@@ -189,3 +189,24 @@ Laplacian
    :toctree: generated/
 
    laplacian_centrality
+
+.. _networkx.algorithms.centrality.centralization:
+
+Centralization
+--------------
+These functions compute Freeman graph-level centralization indices. Each one
+takes a node-level centrality measure, sums the differences between the largest
+node value and every node's value, and divides by the same sum for the star
+graph on the same number of nodes (the theoretical maximum). The result is a
+float in [0, 1]: 1.0 for a star and 0.0 for a complete graph. Graphs with fewer
+than 3 nodes return 0.0. Directed graphs and multigraphs are rejected with
+:exc:`~networkx.NetworkXNotImplemented`. On disconnected graphs, degree and
+betweenness centralization compute as usual, while closeness centralization
+raises :exc:`~networkx.NetworkXError`.
+
+.. autosummary::
+   :toctree: generated/
+
+   degree_centralization
+   closeness_centralization
+   betweenness_centralization
