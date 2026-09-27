@@ -209,3 +209,38 @@ class TestBreadthLimitedSearch:
             assert nx.descendants_at_distance(self.G, 0, distance) == descendants
         for distance, descendants in enumerate([{2}, {3, 7}, {8}, {9}, {10}]):
             assert nx.descendants_at_distance(self.D, 2, distance) == descendants
+
+
+class TestKHopNeighbors:
+    def test_path_graph(self):
+        G = nx.path_graph(7)
+        assert nx.k_hop_neighbors(G, 3, 1) == {2, 4}
+        assert nx.k_hop_neighbors(G, 3, 2) == {1, 2, 4, 5}
+        assert nx.k_hop_neighbors(G, 0, 2, include_source=True) == {0, 1, 2}
+        assert nx.k_hop_neighbors(G, 3, 10) == {0, 1, 2, 4, 5, 6}
+
+    def test_directed_follows_out_edges(self):
+        D = nx.DiGraph([(0, 1), (1, 2), (2, 3), (4, 0)])
+        assert nx.k_hop_neighbors(D, 0, 2) == {1, 2}
+        assert nx.k_hop_neighbors(D, 3, 5) == set()
+        assert nx.k_hop_neighbors(D, 4, 1, include_source=True) == {4, 0}
+
+    def test_cycle_does_not_include_source_by_default(self):
+        G = nx.cycle_graph(4)
+        assert nx.k_hop_neighbors(G, 0, 4) == {1, 2, 3}
+        assert nx.k_hop_neighbors(G, 0, 4, include_source=True) == {0, 1, 2, 3}
+
+    def test_k_zero(self):
+        G = nx.path_graph(3)
+        assert nx.k_hop_neighbors(G, 1, 0) == set()
+        assert nx.k_hop_neighbors(G, 1, 0, include_source=True) == {1}
+
+    def test_source_not_in_graph(self):
+        G = nx.path_graph(3)
+        with pytest.raises(nx.NetworkXError):
+            nx.k_hop_neighbors(G, 99, 1)
+
+    def test_negative_k(self):
+        G = nx.path_graph(3)
+        with pytest.raises(ValueError):
+            nx.k_hop_neighbors(G, 0, -1)

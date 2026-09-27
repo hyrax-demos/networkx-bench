@@ -10,6 +10,7 @@ __all__ = [
     "bfs_predecessors",
     "bfs_successors",
     "descendants_at_distance",
+    "k_hop_neighbors",
     "bfs_layers",
     "bfs_labeled_edges",
     "generic_bfs_edges",
@@ -598,3 +599,71 @@ def descendants_at_distance(G, source, distance):
         if i == distance:
             return set(layer)
     return set()
+
+
+@nx._dispatchable
+def k_hop_neighbors(G, source, k, *, include_source=False):
+    """Returns the nodes within `k` hops of `source` in `G`.
+
+    A node is within `k` hops of `source` if its unweighted shortest-path
+    distance from `source` is at most `k`. For directed graphs, paths
+    follow out-edges (successors), so the result is the set of nodes
+    reachable from `source` in at most `k` steps.
+
+    Parameters
+    ----------
+    G : NetworkX graph
+        A graph. Edge weights are ignored.
+
+    source : node in `G`
+        The node from which distances are measured.
+
+    k : int
+        The maximum number of hops. Must be non-negative.
+
+    include_source : bool, optional (default=False)
+        If True, `source` itself (at distance 0) is included in the result.
+
+    Returns
+    -------
+    set
+        The nodes whose distance from `source` is at most `k`, excluding
+        `source` unless `include_source` is True.
+
+    Raises
+    ------
+    NetworkXError
+        If `source` is not in `G`.
+
+    ValueError
+        If `k` is negative.
+
+    See Also
+    --------
+    descendants_at_distance
+    bfs_layers
+
+    Examples
+    --------
+    >>> G = nx.path_graph(5)
+    >>> nx.k_hop_neighbors(G, 2, 1)
+    {1, 3}
+    >>> nx.k_hop_neighbors(G, 0, 2, include_source=True)
+    {0, 1, 2}
+    >>> D = nx.DiGraph([(0, 1), (1, 2), (3, 0)])
+    >>> nx.k_hop_neighbors(D, 0, 2)
+    {1, 2}
+    """
+    if source not in G:
+        raise nx.NetworkXError(f"The node {source} is not in the graph.")
+    if k < 0:
+        raise ValueError(f"k must be non-negative, got {k}.")
+
+    nodes = set()
+    for i, layer in enumerate(nx.bfs_layers(G, source)):
+        if i > k:
+            break
+        nodes.update(layer)
+    if not include_source:
+        nodes.discard(source)
+    return nodes
