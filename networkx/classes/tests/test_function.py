@@ -1103,3 +1103,37 @@ def test_graph_summary_path_graph():
         "number_of_selfloops": 0,
         "number_of_isolates": 0,
     }
+
+
+def test_leaf_nodes_star():
+    G = nx.star_graph(4)
+    assert set(nx.leaf_nodes(G)) == {1, 2, 3, 4}
+    assert nx.number_of_leaves(G) == 4
+
+
+def test_leaf_nodes_path():
+    G = nx.path_graph(5)
+    assert set(nx.leaf_nodes(G)) == {0, 4}
+    assert nx.number_of_leaves(G) == 2
+
+
+def test_leaf_nodes_directed_path():
+    G = nx.path_graph(4, create_using=nx.DiGraph)
+    # Endpoints have total (in + out) degree 1; interior nodes have 2.
+    assert set(nx.leaf_nodes(G)) == {0, 3}
+    assert nx.number_of_leaves(G) == 2
+
+
+def test_leaf_nodes_selfloop():
+    # A self-loop counts 2 toward degree, so node 0 (edge to 1 + self-loop)
+    # has degree 3 and node 2 (only a self-loop) has degree 2.
+    G = nx.Graph([(0, 1), (0, 0), (2, 2)])
+    assert set(nx.leaf_nodes(G)) == {1}
+    assert nx.number_of_leaves(G) == 1
+
+
+def test_leaf_nodes_returns_iterator():
+    G = nx.path_graph(3)
+    leaves = nx.leaf_nodes(G)
+    assert iter(leaves) is leaves
+    assert nx.number_of_leaves(nx.Graph()) == 0

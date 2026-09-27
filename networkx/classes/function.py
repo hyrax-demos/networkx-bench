@@ -48,6 +48,8 @@ __all__ = [
     "is_path",
     "describe",
     "graph_summary",
+    "leaf_nodes",
+    "number_of_leaves",
 ]
 
 
@@ -1439,6 +1441,69 @@ def number_of_selfloops(G):
     1
     """
     return sum(1 for _ in nx.selfloop_edges(G))
+
+
+def leaf_nodes(G):
+    """Returns an iterator over the leaf nodes of `G`.
+
+    A leaf node is a node of degree exactly one. For directed graphs the
+    total degree (in-degree plus out-degree) is used. As with
+    :func:`degree`, a self-loop contributes two to the degree of its node,
+    so a node whose only edge is a self-loop is not a leaf.
+
+    Parameters
+    ----------
+    G : graph
+        A NetworkX graph.
+
+    Returns
+    -------
+    iterator
+        An iterator over the nodes of `G` with degree one.
+
+    See Also
+    --------
+    number_of_leaves, degree
+
+    Examples
+    --------
+    >>> G = nx.star_graph(3)
+    >>> sorted(nx.leaf_nodes(G))
+    [1, 2, 3]
+    >>> G = nx.DiGraph([(0, 1), (1, 2)])
+    >>> sorted(nx.leaf_nodes(G))
+    [0, 2]
+    """
+    return (n for n, d in G.degree if d == 1)
+
+
+def number_of_leaves(G):
+    """Returns the number of leaf nodes in `G`.
+
+    A leaf node is a node of degree exactly one (total in- plus out-degree
+    for directed graphs; a self-loop counts two toward the degree).
+
+    Parameters
+    ----------
+    G : graph
+        A NetworkX graph.
+
+    Returns
+    -------
+    int
+        The number of nodes of `G` with degree one.
+
+    See Also
+    --------
+    leaf_nodes
+
+    Examples
+    --------
+    >>> G = nx.path_graph(4)
+    >>> nx.number_of_leaves(G)
+    2
+    """
+    return sum(1 for _ in leaf_nodes(G))
 
 
 def is_path(G, path):
