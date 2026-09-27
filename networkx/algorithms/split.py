@@ -64,6 +64,11 @@ def is_split_graph(G):
     .. [1] P. L. Hammer and B. Simeone, "The splittance of a graph",
        Combinatorica 1 (1981), 275--284. https://doi.org/10.1007/BF02579333
     """
+    # Hammer-Simeone (1981) characterization: with degrees sorted
+    # d_1 >= ... >= d_n and m = max{i : d_i >= i - 1}, G is split iff
+    # sum_{i<=m} d_i == m(m-1) + sum_{i>m} d_i. The first m vertices form
+    # the clique K and the rest the independent set I. See P. L. Hammer and
+    # B. Simeone, "The splittance of a graph", Combinatorica 1 (1981) 275-284.
     degrees = sorted((d for _, d in G.degree()), reverse=True)
     m = 0
     for i, d in enumerate(degrees, start=1):
