@@ -170,8 +170,8 @@ def out_degree_centrality(G):
 
 
 @not_implemented_for("directed")
-@nx._dispatchable
-def degree_centralization(G):
+@nx._dispatchable(edge_attrs="weight")
+def degree_centralization(G, weight=None):
     r"""Compute Freeman's degree centralization of an undirected graph.
 
     Degree centralization measures how strongly the edges of a graph are
@@ -190,6 +190,20 @@ def degree_centralization(G):
     ----------
     G : graph
         An undirected NetworkX graph.
+
+    weight : string or None, optional (default=None)
+        The edge attribute that holds the numerical value used as a weight.
+        If None, every edge has weight 1 and the unweighted Freeman
+        centralization above is returned. Otherwise the weighted degree
+        $w(v)$ (the sum of the weights of the edges incident to $v$) is used
+        and the result is normalized by the maximum weighted degree times
+        $n - 1$:
+
+        .. math::
+
+            C_D^w(G) = \frac{\sum_{v \in V} (w_{max} - w(v))}{w_{max} (n - 1)}
+
+        If the maximum weighted degree is 0, the centralization is 0.0.
 
     Returns
     -------
@@ -212,6 +226,10 @@ def degree_centralization(G):
     0.0
     >>> nx.degree_centralization(nx.path_graph(4))
     0.3333333333333333
+    >>> G = nx.Graph()
+    >>> G.add_weighted_edges_from([(0, 1, 1), (1, 2, 2), (2, 3, 3)])
+    >>> round(nx.degree_centralization(G, weight="weight"), 4)
+    0.5333
 
     See Also
     --------
@@ -231,6 +249,10 @@ def degree_centralization(G):
     n = len(G)
     if n < 3:
         return 0.0
-    degrees = [d for _, d in G.degree()]
+    degrees = [d for _, d in G.degree(weight=weight)]
     max_degree = max(degrees)
-    return sum(max_degree - d for d in degrees) / ((n - 1) * (n - 2))
+    if weight is None:
+        return sum(max_degree - d for d in degrees) / ((n - 1) * (n - 2))
+    if max_degree == 0:
+        return 0.0
+    return sum(max_degree - d for d in degrees) / (max_degree * (n - 1))
