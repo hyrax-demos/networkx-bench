@@ -1641,7 +1641,20 @@ def describe(G, describe_hook=None):
         print(f"{key:<{max_key_len}} : {val}")
 
 
-def graph_summary(G):
+# Resolved lazily (at call time) because ``networkx`` is only partially
+# initialized when this module is imported.
+_GRAPH_SUMMARY_FUNCS = {
+    "number_of_nodes": lambda G: nx.number_of_nodes(G),
+    "number_of_edges": lambda G: nx.number_of_edges(G),
+    "density": lambda G: nx.density(G),
+    "is_directed": lambda G: nx.is_directed(G),
+    "is_multigraph": lambda G: G.is_multigraph(),
+    "number_of_selfloops": lambda G: nx.number_of_selfloops(G),
+    "number_of_isolates": lambda G: nx.number_of_isolates(G),
+}
+
+
+def graph_summary(G, include=None):
     """Returns a dictionary of basic structural properties of `G`.
 
     Parameters
@@ -1649,10 +1662,14 @@ def graph_summary(G):
     G : graph
         A NetworkX graph.
 
+    include : iterable of str, optional (default=None)
+        The names of the keys to compute. If None, all keys are computed.
+        Otherwise only the named keys are computed and returned.
+
     Returns
     -------
     dict
-        A dictionary with the following keys:
+        A dictionary with (a subset of) the following keys:
 
         - ``"number_of_nodes"``: the number of nodes in `G`.
         - ``"number_of_edges"``: the number of edges in `G`.
@@ -1661,6 +1678,13 @@ def graph_summary(G):
         - ``"is_multigraph"``: whether `G` is a multigraph.
         - ``"number_of_selfloops"``: the number of selfloop edges in `G`.
         - ``"number_of_isolates"``: the number of isolated nodes in `G`.
+
+        Keys appear in the order listed above.
+
+    Raises
+    ------
+    ValueError
+        If `include` contains a key name not listed above.
 
     See Also
     --------
@@ -1676,16 +1700,21 @@ def graph_summary(G):
     0.5
     >>> summary["number_of_isolates"]
     0
+    >>> nx.graph_summary(G, include=["number_of_nodes", "is_directed"])
+    {'number_of_nodes': 4, 'is_directed': False}
     """
-    return {
-        "number_of_nodes": nx.number_of_nodes(G),
-        "number_of_edges": nx.number_of_edges(G),
-        "density": nx.density(G),
-        "is_directed": nx.is_directed(G),
-        "is_multigraph": G.is_multigraph(),
-        "number_of_selfloops": nx.number_of_selfloops(G),
-        "number_of_isolates": nx.number_of_isolates(G),
-    }
+    if include is None:
+        keys = _GRAPH_SUMMARY_FUNCS.keys()
+    else:
+        requested = set(include)
+        unknown = requested - _GRAPH_SUMMARY_FUNCS.keys()
+        if unknown:
+            raise ValueError(
+                f"Unknown graph_summary key(s): {sorted(map(str, unknown))}. "
+                f"Valid keys are: {list(_GRAPH_SUMMARY_FUNCS)}"
+            )
+        keys = [k for k in _GRAPH_SUMMARY_FUNCS if k in requested]
+    return {key: _GRAPH_SUMMARY_FUNCS[key](G) for key in keys}
 
 
 def _create_describe_info_dict(G):

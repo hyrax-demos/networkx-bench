@@ -1105,6 +1105,23 @@ def test_graph_summary_path_graph():
     }
 
 
+def test_graph_summary_include_subset():
+    G = nx.MultiDiGraph([(0, 1), (0, 1), (1, 1)])
+    G.add_node(2)
+    summary = nx.graph_summary(G, include=["number_of_isolates", "number_of_nodes"])
+    assert summary == {"number_of_nodes": 3, "number_of_isolates": 1}
+    assert list(summary) == ["number_of_nodes", "number_of_isolates"]
+    assert nx.graph_summary(G, include=iter(["is_directed"])) == {"is_directed": True}
+    assert nx.graph_summary(G, include=[]) == {}
+    assert nx.graph_summary(G, include=None) == nx.graph_summary(G)
+
+
+def test_graph_summary_include_unknown_key():
+    G = nx.path_graph(3)
+    with pytest.raises(ValueError, match="bogus"):
+        nx.graph_summary(G, include=["number_of_nodes", "bogus"])
+
+
 def test_leaf_nodes_star():
     G = nx.star_graph(4)
     assert set(nx.leaf_nodes(G)) == {1, 2, 3, 4}
